@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { collectMessages, extractTitle } from "../src/extractor";
 import { conversationToMarkdown, markdownFilename } from "../src/markdown";
+import { allMessageIndexes, filterConversationMessages, shortMessagePreview } from "../src/selection";
 
 describe("conversation extraction", () => {
   it("collects ChatGPT role-tagged messages in order", () => {
@@ -96,5 +97,52 @@ describe("Markdown output", () => {
     expect(markdownFilename("My Chat: Export!", new Date("2026-05-31T12:00:00Z"))).toBe(
       "my-chat-export-2026-05-31.md"
     );
+  });
+});
+
+describe("message selection", () => {
+  const conversation = {
+    title: "Export Notes",
+    url: "https://chatgpt.com/c/abc",
+    exportedAt: "2026-05-31T00:00:00.000Z",
+    messages: [
+      { speaker: "user" as const, text: "Question" },
+      { speaker: "assistant" as const, text: "Answer" },
+      { speaker: "user" as const, text: "Follow-up" }
+    ]
+  };
+
+  it("selects every detected message by default", () => {
+    expect([...allMessageIndexes(3)]).toEqual([0, 1, 2]);
+  });
+
+  it("filters exported messages by checked message index", () => {
+    expect(filterConversationMessages(conversation, new Set([0, 2, 99, 2]))).toEqual({
+      ...conversation,
+      messages: [
+        { speaker: "user", text: "Question" },
+        { speaker: "user", text: "Follow-up" }
+      ]
+    });
+  });
+
+  it("keeps selected-message Markdown scoped to checked messages", () => {
+    const markdown = conversationToMarkdown(filterConversationMessages(conversation, [1]));
+
+    expect(markdown).not.toContain("## User\n\nQuestion");
+    expect(markdown).toContain("## Assistant\n\nAnswer");
+    expect(markdown).not.toContain("Follow-up");
+  });
+
+  it("renders compact one-line message previews", () => {
+    expect(
+      shortMessagePreview(
+        {
+          speaker: "assistant",
+          text: "First line\n\nSecond line with enough text to truncate cleanly"
+        },
+        24
+      )
+    ).toBe("First line Second...");
   });
 });

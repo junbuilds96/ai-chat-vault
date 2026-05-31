@@ -6,10 +6,15 @@ AI Chat Vault is a compact Chrome Manifest V3 extension that exports the visible
 
 - Injects a small exporter panel into ChatGPT pages.
 - Captures the current conversation from the page DOM.
+- Shows detected turns with role, preview, and a checkbox after capture.
 - Previews Markdown before export.
 - Copies Markdown to the clipboard.
 - Downloads a `.md` file locally.
 - Uses no backend services and stores no data.
+
+## Selected-Message Export
+
+Click **Capture** to detect the visible ChatGPT turns. All detected messages are checked by default, preserving full-conversation export. Uncheck any turns you do not want, then use **Copy** or **Download** to export only the checked messages. If no messages are selected, the panel shows an error and does not export.
 
 ## Development
 
