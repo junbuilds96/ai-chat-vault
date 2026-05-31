@@ -9,7 +9,7 @@ AI Chat Vault is a compact Chrome Manifest V3 extension that exports the visible
 - Shows detected turns with role, preview, and a checkbox after capture.
 - Previews Markdown before export.
 - Copies Markdown to the clipboard.
-- Downloads a `.md` file locally.
+- Downloads a `.md` file locally with a safe, readable filename.
 - Uses no backend services and stores no data.
 
 ## Selected-Message Export

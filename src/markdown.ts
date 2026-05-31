@@ -26,10 +26,13 @@ export function conversationToMarkdown(conversation: ConversationExport): string
 export function markdownFilename(title: string, date = new Date()): string {
   const stamp = date.toISOString().slice(0, 10);
   const slug = title
+    .normalize("NFKC")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
+    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-")
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, "-")
+    .replace(/^[-.\s]+|[-.\s]+$/g, "")
+    .slice(0, 80)
+    .replace(/^[-.\s]+|[-.\s]+$/g, "");
 
   return `${slug || "chatgpt-conversation"}-${stamp}.md`;
 }

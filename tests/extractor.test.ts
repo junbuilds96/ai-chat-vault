@@ -120,6 +120,26 @@ describe("Markdown output", () => {
       "my-chat-export-2026-05-31.md"
     );
   });
+
+  it("keeps Chinese title text in generated filenames", () => {
+    expect(markdownFilename("中文标题", new Date("2026-05-31T12:00:00Z"))).toBe(
+      "中文标题-2026-05-31.md"
+    );
+  });
+
+  it("keeps words and numbers while replacing mixed emoji and punctuation with hyphens", () => {
+    expect(markdownFilename("Launch 🚀 Plan #42!!!", new Date("2026-05-31T12:00:00Z"))).toBe(
+      "launch-plan-42-2026-05-31.md"
+    );
+  });
+
+  it("removes unsafe path characters from generated filename slugs", () => {
+    const filename = markdownFilename('bad/name\\thing:*?"<>| done', new Date("2026-05-31T12:00:00Z"));
+    const slug = filename.replace("-2026-05-31.md", "");
+
+    expect(slug).not.toMatch(/[<>:"/\\|?*]/);
+    expect(filename).toBe("bad-name-thing-done-2026-05-31.md");
+  });
 });
 
 describe("message selection", () => {
