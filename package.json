@@ -1,0 +1,30 @@
+{
+  "name": "ai-chat-vault",
+  "version": "0.1.0",
+  "description": "Compact Chrome MV3 extension for exporting ChatGPT conversations as Markdown.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "package": "npm run build && node scripts/package-extension.mjs"
+  },
+  "keywords": [
+    "chrome-extension",
+    "chatgpt",
+    "markdown",
+    "export"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "@types/chrome": "^0.0.268",
+    "@vitest/coverage-v8": "^1.6.0",
+    "jsdom": "^24.0.0",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.0",
+    "vitest": "^1.6.0"
+  }
+}

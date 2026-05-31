@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "AI Chat Vault",
+  "description": "Export ChatGPT conversations to local Markdown from the page.",
+  "version": "0.1.0",
+  "permissions": [],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["assets/content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

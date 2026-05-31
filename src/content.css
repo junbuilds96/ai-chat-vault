@@ -1,0 +1,94 @@
+#ai-chat-vault {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483647;
+  width: min(380px, calc(100vw - 32px));
+  color: #1f2933;
+  background: #ffffff;
+  border: 1px solid #d7dde5;
+  border-radius: 8px;
+  box-shadow: 0 16px 44px rgb(15 23 42 / 18%);
+  font: 13px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+#ai-chat-vault * {
+  box-sizing: border-box;
+}
+
+#ai-chat-vault .acv-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid #edf0f3;
+}
+
+#ai-chat-vault .acv-header strong {
+  font-size: 14px;
+}
+
+#ai-chat-vault .acv-header span {
+  color: #697586;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+#ai-chat-vault .acv-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+#ai-chat-vault button {
+  min-height: 32px;
+  color: #ffffff;
+  background: #2563eb;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+}
+
+#ai-chat-vault button:hover {
+  background: #1d4ed8;
+}
+
+#ai-chat-vault button:focus-visible,
+#ai-chat-vault textarea:focus-visible {
+  outline: 2px solid #f97316;
+  outline-offset: 2px;
+}
+
+#ai-chat-vault textarea {
+  display: block;
+  width: calc(100% - 24px);
+  min-height: 180px;
+  max-height: 42vh;
+  margin: 0 12px;
+  padding: 10px;
+  resize: vertical;
+  color: #111827;
+  background: #f8fafc;
+  border: 1px solid #d7dde5;
+  border-radius: 6px;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+#ai-chat-vault .acv-status {
+  min-height: 32px;
+  padding: 8px 12px 12px;
+  color: #4b5563;
+  font-size: 12px;
+}
+
+@media (max-width: 520px) {
+  #ai-chat-vault {
+    right: 10px;
+    bottom: 10px;
+    width: calc(100vw - 20px);
+  }
+}
