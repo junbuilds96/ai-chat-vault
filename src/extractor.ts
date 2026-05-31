@@ -85,8 +85,14 @@ export function normalizeMessageText(element: HTMLElement): string {
   const clone = element.cloneNode(true) as HTMLElement;
 
   clone
-    .querySelectorAll("script, style, button, nav, form, textarea, input, select, [aria-hidden='true']")
+    .querySelectorAll(
+      "script, style, button, nav, form, textarea, input, select, [aria-hidden='true'], [hidden], .sr-only"
+    )
     .forEach((node) => node.remove());
+
+  clone.querySelectorAll("a[href]").forEach((link) => {
+    replaceElementWithText(link, markdownLink(link as HTMLAnchorElement));
+  });
 
   clone.querySelectorAll("pre").forEach((pre) => {
     const text = pre.textContent ?? "";
@@ -99,11 +105,100 @@ export function normalizeMessageText(element: HTMLElement): string {
     }
   });
 
+  clone.querySelectorAll("table").forEach((table) => {
+    replaceElementWithText(table, `\n\n${markdownTable(table as HTMLTableElement)}\n\n`);
+  });
+
+  clone.querySelectorAll("blockquote").forEach((blockquote) => {
+    replaceElementWithText(blockquote, `\n\n${markdownQuote(blockquote)}\n\n`);
+  });
+
   return (clone.innerText || clone.textContent || "")
     .replace(/\u00a0/g, " ")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function replaceElementWithText(element: Element, text: string): void {
+  element.replaceWith(element.ownerDocument.createTextNode(text));
+}
+
+function markdownLink(link: HTMLAnchorElement): string {
+  const text = normalizeInlineText(elementText(link));
+  const href = link.getAttribute("href")?.trim() ?? "";
+
+  if (!text || !href || text === href) {
+    return text || href;
+  }
+
+  return `[${escapeMarkdownLinkText(text)}](${href})`;
+}
+
+function markdownQuote(blockquote: Element): string {
+  const text = normalizeBlockText(elementText(blockquote));
+  if (!text) {
+    return "";
+  }
+
+  return text
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
+}
+
+function markdownTable(table: HTMLTableElement): string {
+  const rows = Array.from(table.querySelectorAll("tr"))
+    .map((row) =>
+      Array.from(row.querySelectorAll("th, td")).map((cell) =>
+        escapeMarkdownTableCell(normalizeInlineText(elementText(cell)))
+      )
+    )
+    .filter((cells) => cells.length > 0);
+
+  if (rows.length === 0) {
+    return "";
+  }
+
+  const columnCount = Math.max(...rows.map((cells) => cells.length));
+  const normalizedRows = rows.map((cells) => padCells(cells, columnCount));
+  const header = normalizedRows[0];
+  const separator = Array.from({ length: columnCount }, () => "---");
+  const body = normalizedRows.slice(1);
+
+  return [header, separator, ...body].map(markdownTableRow).join("\n");
+}
+
+function padCells(cells: string[], columnCount: number): string[] {
+  return [...cells, ...Array.from({ length: columnCount - cells.length }, () => "")];
+}
+
+function markdownTableRow(cells: string[]): string {
+  return `| ${cells.join(" | ")} |`;
+}
+
+function escapeMarkdownTableCell(value: string): string {
+  return value.replace(/\|/g, "\\|");
+}
+
+function escapeMarkdownLinkText(value: string): string {
+  return value.replace(/([\[\]])/g, "\\$1");
+}
+
+function normalizeInlineText(value: string): string {
+  return value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function normalizeBlockText(value: string): string {
+  return value
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function elementText(element: Element): string {
+  return (element as HTMLElement).innerText || element.textContent || "";
 }
 
 function detectSpeaker(element: HTMLElement): Speaker | null {

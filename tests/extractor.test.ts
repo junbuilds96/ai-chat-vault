@@ -31,6 +31,41 @@ describe("conversation extraction", () => {
     expect(collectMessages(document)[0].text).toContain("```\nnpm test\n```");
   });
 
+  it("preserves ChatGPT rich Markdown content without copy UI text", () => {
+    document.body.innerHTML = `
+      <article data-message-author-role="assistant">
+        <div class="markdown">
+          <p>Read the <a href="https://example.com/docs">docs</a>.</p>
+          <blockquote>
+            <p>Use the stable API.</p>
+          </blockquote>
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Value</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Alpha</td><td>A | B</td></tr>
+            </tbody>
+          </table>
+          <button>Copy</button>
+          <span hidden>Copied</span>
+        </div>
+      </article>
+    `;
+
+    expect(collectMessages(document)[0].text).toBe(
+      [
+        "Read the [docs](https://example.com/docs).",
+        "",
+        "> Use the stable API.",
+        "",
+        "| Name | Value |",
+        "| --- | --- |",
+        "| Alpha | A \\| B |"
+      ].join("\n")
+    );
+  });
+
   it("falls back to a default title", () => {
     document.title = "";
     document.body.innerHTML = "";
