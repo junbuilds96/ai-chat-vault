@@ -67,6 +67,28 @@ describe("conversation extraction", () => {
     );
   });
 
+  it("preserves ordered and unordered list markers without hidden or button text", () => {
+    document.body.innerHTML = `
+      <article data-message-author-role="assistant">
+        <div class="markdown">
+          <ol>
+            <li>First</li>
+            <li>Second with <code>x</code></li>
+          </ol>
+          <ul>
+            <li>Bullet</li>
+          </ul>
+          <button>Copy</button>
+          <span hidden>Copied</span>
+        </div>
+      </article>
+    `;
+
+    expect(collectMessages(document)[0].text).toBe(
+      ["1. First", "2. Second with x", "- Bullet"].join("\n")
+    );
+  });
+
   it("falls back to a default title", () => {
     document.title = "";
     document.body.innerHTML = "";

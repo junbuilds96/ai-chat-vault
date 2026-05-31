@@ -99,18 +99,18 @@ export function normalizeMessageText(element: HTMLElement): string {
     pre.textContent = `\n\n\`\`\`\n${text.trim()}\n\`\`\`\n\n`;
   });
 
-  clone.querySelectorAll("li").forEach((li) => {
-    if (!li.textContent?.trim().startsWith("-")) {
-      li.prepend("- ");
-    }
-  });
-
   clone.querySelectorAll("table").forEach((table) => {
     replaceElementWithText(table, `\n\n${markdownTable(table as HTMLTableElement)}\n\n`);
   });
 
   clone.querySelectorAll("blockquote").forEach((blockquote) => {
     replaceElementWithText(blockquote, `\n\n${markdownQuote(blockquote)}\n\n`);
+  });
+
+  clone.querySelectorAll("ol, ul").forEach((list) => {
+    removeWhitespaceSibling(list.previousSibling);
+    removeWhitespaceSibling(list.nextSibling);
+    replaceElementWithText(list, markdownListText(list as HTMLOListElement | HTMLUListElement));
   });
 
   return (clone.innerText || clone.textContent || "")
@@ -122,6 +122,12 @@ export function normalizeMessageText(element: HTMLElement): string {
 
 function replaceElementWithText(element: Element, text: string): void {
   element.replaceWith(element.ownerDocument.createTextNode(text));
+}
+
+function removeWhitespaceSibling(node: ChildNode | null): void {
+  if (node?.nodeType === Node.TEXT_NODE && !node.textContent?.trim()) {
+    node.remove();
+  }
 }
 
 function markdownLink(link: HTMLAnchorElement): string {
@@ -167,6 +173,27 @@ function markdownTable(table: HTMLTableElement): string {
   const body = normalizedRows.slice(1);
 
   return [header, separator, ...body].map(markdownTableRow).join("\n");
+}
+
+function markdownList(list: HTMLOListElement | HTMLUListElement): string {
+  const ordered = list.tagName.toLowerCase() === "ol";
+
+  return Array.from(list.children)
+    .filter((item): item is HTMLLIElement => item.tagName.toLowerCase() === "li")
+    .map((item, index) => {
+      const marker = ordered ? `${index + 1}.` : "-";
+      return `${marker} ${normalizeInlineText(elementText(item))}`;
+    })
+    .join("\n");
+}
+
+function markdownListText(list: HTMLOListElement | HTMLUListElement): string {
+  const previousText = list.previousSibling?.textContent ?? "";
+  const nextText = list.nextSibling?.textContent ?? "";
+  const prefix = previousText.trim() && !previousText.endsWith("\n") ? "\n" : "";
+  const suffix = nextText.trim() && !nextText.startsWith("\n") ? "\n" : "";
+
+  return `${prefix}${markdownList(list)}${suffix}`;
 }
 
 function padCells(cells: string[], columnCount: number): string[] {
