@@ -32,6 +32,83 @@ describe("conversation extraction", () => {
     expect(collectMessages(document)[0].text).toContain("```\nnpm test\n```");
   });
 
+  it("preserves code block language labels from class names", () => {
+    document.body.innerHTML = `
+      <article data-message-author-role="assistant">
+        <pre class="language-ts"><code>const value: string = "ok";</code></pre>
+        <pre><code class="lang-python">print("ok")</code></pre>
+      </article>
+    `;
+
+    expect(collectMessages(document)[0].text).toBe(
+      [
+        "```ts",
+        "const value: string = \"ok\";",
+        "```",
+        "",
+        "```python",
+        "print(\"ok\")",
+        "```"
+      ].join("\n")
+    );
+  });
+
+  it("preserves code block language labels from data attributes", () => {
+    document.body.innerHTML = `
+      <article data-message-author-role="assistant">
+        <pre data-language="JavaScript">console.log("ok");</pre>
+        <pre><code data-lang="json">{ "ok": true }</code></pre>
+      </article>
+    `;
+
+    expect(collectMessages(document)[0].text).toBe(
+      [
+        "```javascript",
+        "console.log(\"ok\");",
+        "```",
+        "",
+        "```json",
+        "{ \"ok\": true }",
+        "```"
+      ].join("\n")
+    );
+  });
+
+  it("preserves code block language labels from nearby visible headers", () => {
+    document.body.innerHTML = `
+      <article data-message-author-role="assistant">
+        <div>
+          <div>TypeScript <button>Copy code</button></div>
+          <pre>const value = 1;</pre>
+        </div>
+        <section>
+          <header>TSX</header>
+          <pre><code>export function App() { return &lt;main /&gt;; }</code></pre>
+        </section>
+        <div>
+          <span>Bash</span>
+          <pre>npm test</pre>
+        </div>
+      </article>
+    `;
+
+    expect(collectMessages(document)[0].text).toBe(
+      [
+        "```typescript",
+        "const value = 1;",
+        "```",
+        "",
+        "```tsx",
+        "export function App() { return <main />; }",
+        "```",
+        "",
+        "```bash",
+        "npm test",
+        "```"
+      ].join("\n")
+    );
+  });
+
   it("preserves ChatGPT rich Markdown content without copy UI text", () => {
     document.body.innerHTML = `
       <article data-message-author-role="assistant">

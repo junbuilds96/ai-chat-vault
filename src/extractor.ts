@@ -24,6 +24,20 @@ const ROLE_LABELS: Record<Speaker, string> = {
   system: "System"
 };
 
+const VISIBLE_CODE_LANGUAGE_LABELS: Record<string, string> = {
+  bash: "bash",
+  javascript: "javascript",
+  js: "javascript",
+  json: "json",
+  py: "python",
+  python: "python",
+  shell: "bash",
+  sh: "bash",
+  ts: "ts",
+  tsx: "tsx",
+  typescript: "typescript"
+};
+
 export function extractConversation(documentRef: Document = document): ConversationExport {
   const messages = collectMessages(documentRef);
 
@@ -104,7 +118,8 @@ export function normalizeMessageText(element: HTMLElement): string {
 
   clone.querySelectorAll("pre").forEach((pre) => {
     const text = pre.textContent ?? "";
-    pre.textContent = `\n\n\`\`\`\n${text.trim()}\n\`\`\`\n\n`;
+    const language = detectCodeBlockLanguage(pre as HTMLElement, clone);
+    pre.textContent = `\n\n\`\`\`${language}\n${text.trim()}\n\`\`\`\n\n`;
   });
 
   clone.querySelectorAll("table").forEach((table) => {
@@ -246,6 +261,104 @@ function normalizeBlockText(value: string): string {
 
 function elementText(element: Element): string {
   return (element as HTMLElement).innerText || element.textContent || "";
+}
+
+function detectCodeBlockLanguage(pre: HTMLElement, root: HTMLElement): string {
+  const code = pre.querySelector<HTMLElement>("code");
+
+  for (const element of [code, pre]) {
+    if (!element) {
+      continue;
+    }
+
+    const language = codeLanguageFromAttributes(element) || codeLanguageFromClasses(element);
+    if (language) {
+      return language;
+    }
+  }
+
+  const nearbyLabel = nearbyCodeLanguageLabel(pre, root);
+  if (nearbyLabel) {
+    nearbyLabel.element.remove();
+    return nearbyLabel.language;
+  }
+
+  return "";
+}
+
+function codeLanguageFromAttributes(element: HTMLElement): string {
+  for (const attribute of ["data-language", "data-lang"]) {
+    const language = normalizeExplicitCodeLanguage(element.getAttribute(attribute));
+    if (language) {
+      return language;
+    }
+  }
+
+  return "";
+}
+
+function codeLanguageFromClasses(element: HTMLElement): string {
+  for (const className of Array.from(element.classList)) {
+    const match = className.match(/^(?:language|lang)-(.+)$/i);
+    const language = normalizeExplicitCodeLanguage(match?.[1] ?? "");
+    if (language) {
+      return language;
+    }
+  }
+
+  return "";
+}
+
+function nearbyCodeLanguageLabel(
+  pre: HTMLElement,
+  root: HTMLElement
+): { language: string; element: HTMLElement } | null {
+  for (const element of nearbyCodeLabelElements(pre, root)) {
+    const language = normalizeVisibleCodeLanguage(elementText(element));
+    if (language) {
+      return { language, element };
+    }
+  }
+
+  return null;
+}
+
+function nearbyCodeLabelElements(pre: HTMLElement, root: HTMLElement): HTMLElement[] {
+  const elements: HTMLElement[] = [];
+  let current: HTMLElement | null = pre;
+
+  while (current && current !== root) {
+    const previous = current.previousElementSibling;
+    if (previous instanceof HTMLElement && !previous.querySelector("pre")) {
+      elements.push(previous);
+    }
+
+    current = current.parentElement;
+  }
+
+  return elements;
+}
+
+function normalizeExplicitCodeLanguage(value: string | null | undefined): string {
+  const normalized = normalizeLanguageValue(value);
+  if (!normalized) {
+    return "";
+  }
+
+  return VISIBLE_CODE_LANGUAGE_LABELS[normalized] ?? normalized;
+}
+
+function normalizeVisibleCodeLanguage(value: string): string {
+  const normalized = normalizeLanguageValue(value);
+  return normalized ? VISIBLE_CODE_LANGUAGE_LABELS[normalized] ?? "" : "";
+}
+
+function normalizeLanguageValue(value: string | null | undefined): string {
+  return (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[^a-z0-9_+.#-]/g, "");
 }
 
 function detectSpeaker(element: HTMLElement): Speaker | null {
