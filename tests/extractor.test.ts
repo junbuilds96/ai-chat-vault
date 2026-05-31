@@ -85,7 +85,36 @@ describe("conversation extraction", () => {
     `;
 
     expect(collectMessages(document)[0].text).toBe(
-      ["1. First", "2. Second with x", "- Bullet"].join("\n")
+      ["1. First", "2. Second with `x`", "- Bullet"].join("\n")
+    );
+  });
+
+  it("preserves inline code in ChatGPT markdown paragraphs and list items", () => {
+    document.body.innerHTML = `
+      <article data-message-author-role="assistant">
+        <div class="markdown prose">
+          <p>Use <code>npm test</code> before <code>git commit</code>.</p>
+          <ul>
+            <li>Escape a literal <code>value \`with tick</code> safely.</li>
+            <li>Use <code>npm run build</code> next.</li>
+          </ul>
+          <pre><code>const command = "npm run build";</code></pre>
+          <button>Copy code</button>
+          <span hidden>Copied</span>
+        </div>
+      </article>
+    `;
+
+    expect(collectMessages(document)[0].text).toBe(
+      [
+        "Use `npm test` before `git commit`.",
+        "- Escape a literal ``value `with tick`` safely.",
+        "- Use `npm run build` next.",
+        "",
+        "```",
+        "const command = \"npm run build\";",
+        "```"
+      ].join("\n")
     );
   });
 

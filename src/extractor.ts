@@ -90,6 +90,14 @@ export function normalizeMessageText(element: HTMLElement): string {
     )
     .forEach((node) => node.remove());
 
+  clone.querySelectorAll("code").forEach((code) => {
+    if (code.closest("pre")) {
+      return;
+    }
+
+    replaceElementWithText(code, markdownInlineCode(elementText(code)));
+  });
+
   clone.querySelectorAll("a[href]").forEach((link) => {
     replaceElementWithText(link, markdownLink(link as HTMLAnchorElement));
   });
@@ -194,6 +202,18 @@ function markdownListText(list: HTMLOListElement | HTMLUListElement): string {
   const suffix = nextText.trim() && !nextText.startsWith("\n") ? "\n" : "";
 
   return `${prefix}${markdownList(list)}${suffix}`;
+}
+
+function markdownInlineCode(value: string): string {
+  const text = normalizeInlineText(value);
+  const longestBacktickRun = Math.max(
+    0,
+    ...Array.from(text.matchAll(/`+/g), (match) => match[0].length)
+  );
+  const delimiter = "`".repeat(longestBacktickRun + 1);
+  const padding = text.startsWith("`") || text.endsWith("`") ? " " : "";
+
+  return `${delimiter}${padding}${text}${padding}${delimiter}`;
 }
 
 function padCells(cells: string[], columnCount: number): string[] {
