@@ -28,6 +28,8 @@ npm run package
 
 The build writes the unpacked extension to `dist/`. The package command creates `release/ai-chat-vault.zip`.
 
+Chrome Web Store privacy and permission notes are in [docs/chrome-web-store-readiness.md](docs/chrome-web-store-readiness.md).
+
 ## Load In Chrome
 
 1. Run `npm run build`.
