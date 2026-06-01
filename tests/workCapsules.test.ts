@@ -302,13 +302,16 @@ describe("work capsule output presets", () => {
       { id: "markdown", name: "Plain Markdown" },
       { id: "generic-ai-context", name: "Generic AI context" },
       { id: "chatgpt-project-context", name: "ChatGPT Project-style context" },
-      { id: "claude-project-context", name: "Claude Project-style context" }
+      { id: "claude-project-context", name: "Claude Project-style context" },
+      { id: "gemini-context", name: "Gemini context" }
     ]);
     expect(isWorkCapsuleOutputPresetId("claude-project-context")).toBe(true);
+    expect(isWorkCapsuleOutputPresetId("gemini-context")).toBe(true);
     expect(isWorkCapsuleOutputPresetId("remote-provider")).toBe(false);
     expect(workCapsuleOutputPresetName("chatgpt-project-context")).toBe(
       "ChatGPT Project-style context"
     );
+    expect(workCapsuleOutputPresetName("gemini-context")).toBe("Gemini context");
   });
 
   it("renders the plain Markdown preset as the existing Markdown output", () => {
@@ -492,6 +495,74 @@ Continue the launch plan using only local-first Work Capsule context.
   Stable enough for Week 1 storage tests.
 
 ## Source Trace
+
+- Title: ChatGPT planning chat
+- URL: https://chatgpt.com/c/local-planning
+- Selected turn IDs: turn-1, turn-2
+- Selected excerpts:
+  - turn-1 (user): Create a local schema.
+  - turn-2 (assistant): Keep storage local-only.
+`);
+  });
+
+  it("renders deterministic Gemini context", () => {
+    const rendered = renderWorkCapsuleOutputPreset(
+      capsule({ project: "Client Launch" }),
+      "gemini-context"
+    );
+
+    expect(rendered).toBe(`# Gemini Context
+
+## How To Use
+
+Paste this locally generated Work Capsule into Gemini or a Gemini workspace-style session as user-provided context. It does not connect to Gemini, update any workspace, or automate provider UI.
+
+## Title
+
+Launch Plan
+
+## Project
+
+Client Launch
+
+## Goal
+
+Ship the first local-only work capsule.
+
+## Instructions For Gemini
+
+Continue the launch plan using only local-first Work Capsule context.
+
+## Reusable Context
+
+- Use Chrome local storage only.
+
+## Decisions
+
+- Keep Week 1 UI out of scope.
+
+## Constraints
+
+- Do not call network APIs.
+
+## Facts
+
+- The extension already captures ChatGPT turns.
+
+## Open Questions
+
+- Which popup affordance creates capsules later?
+
+## Next Actions
+
+- [todo] @user Wire this into the popup flow.
+
+## Artifacts
+
+- Capsule schema (spec)
+  Stable enough for Week 1 storage tests.
+
+## Source
 
 - Title: ChatGPT planning chat
 - URL: https://chatgpt.com/c/local-planning

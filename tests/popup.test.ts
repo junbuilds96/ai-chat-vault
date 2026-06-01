@@ -654,7 +654,8 @@ describe("toolbar popup", () => {
       "Plain Markdown",
       "Generic AI context",
       "ChatGPT Project-style context",
-      "Claude Project-style context"
+      "Claude Project-style context",
+      "Gemini context"
     ]);
     expect(workCapsulePresetSelect().value).toBe("generic-ai-context");
     expect(capsuleField("title").value).toBe("Popup Test - ChatGPT");
@@ -1037,6 +1038,19 @@ describe("toolbar popup", () => {
     );
     expect(claudeCopied).toContain("## Source Trace");
     expect(status()).toBe("Copied Claude Project-style context to clipboard");
+
+    workCapsulePresetSelect().value = "gemini-context";
+    workCapsulePresetSelect().dispatchEvent(new Event("change", { bubbles: true }));
+    libraryButtons("copy-library-capsule-context")[0].click();
+    await flushAsyncClick();
+
+    const geminiCopied = writeText.mock.calls[2][0] as string;
+    expect(geminiCopied).toContain("# Gemini Context");
+    expect(geminiCopied).toContain(
+      "## Instructions For Gemini\n\nUse this saved context outside the original conversation."
+    );
+    expect(geminiCopied).toContain("## Source");
+    expect(status()).toBe("Copied Gemini context to clipboard");
   });
 
   it("handles stale or invalid Work Capsule Library bodies without opening the editor", async () => {
@@ -1313,16 +1327,29 @@ describe("toolbar popup", () => {
     expect(writeText.mock.calls[1][0]).toContain("## Source Trace");
     expect(status()).toBe("Copied ChatGPT Project-style context to clipboard");
 
-    button("copy-capsule-markdown").click();
+    workCapsulePresetSelect().value = "gemini-context";
+    workCapsulePresetSelect().dispatchEvent(new Event("change", { bubbles: true }));
+    expect(status()).toBe("Selected Gemini context");
+
+    button("copy-capsule-context").click();
     await flushAsyncClick();
+    expect(writeText.mock.calls[2][0]).toContain("# Gemini Context");
     expect(writeText.mock.calls[2][0]).toContain(
-      "## Context Prompt\n\nPaste this exact context prompt into a new chat."
+      "## Instructions For Gemini\n\nPaste this exact context prompt into a new chat."
     );
     expect(writeText.mock.calls[2][0]).toContain("## Source");
-    expect(writeText.mock.calls[2][0]).toContain(
+    expect(status()).toBe("Copied Gemini context to clipboard");
+
+    button("copy-capsule-markdown").click();
+    await flushAsyncClick();
+    expect(writeText.mock.calls[3][0]).toContain(
+      "## Context Prompt\n\nPaste this exact context prompt into a new chat."
+    );
+    expect(writeText.mock.calls[3][0]).toContain("## Source");
+    expect(writeText.mock.calls[3][0]).toContain(
       "- Selected turn IDs: message-1, message-2, message-3"
     );
-    expect(writeText.mock.calls[2][0]).toContain(
+    expect(writeText.mock.calls[3][0]).toContain(
       "- message-3 (user): Follow-up three"
     );
     expect(status()).toBe("Copied capsule Markdown to clipboard");

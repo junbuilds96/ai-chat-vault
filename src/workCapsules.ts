@@ -4,7 +4,8 @@ export const WORK_CAPSULE_OUTPUT_PRESETS = [
   { id: "markdown", name: "Plain Markdown" },
   { id: "generic-ai-context", name: "Generic AI context" },
   { id: "chatgpt-project-context", name: "ChatGPT Project-style context" },
-  { id: "claude-project-context", name: "Claude Project-style context" }
+  { id: "claude-project-context", name: "Claude Project-style context" },
+  { id: "gemini-context", name: "Gemini context" }
 ] as const;
 export const DEFAULT_WORK_CAPSULE_OUTPUT_PRESET_ID = "generic-ai-context";
 
@@ -125,7 +126,8 @@ const WORK_CAPSULE_OUTPUT_PRESET_NAME_BY_ID: Record<
   markdown: "Plain Markdown",
   "generic-ai-context": "Generic AI context",
   "chatgpt-project-context": "ChatGPT Project-style context",
-  "claude-project-context": "Claude Project-style context"
+  "claude-project-context": "Claude Project-style context",
+  "gemini-context": "Gemini context"
 };
 
 export function workCapsuleBodyKey(id: string): string {
@@ -222,6 +224,8 @@ export function renderWorkCapsuleOutputPreset(
       return renderChatGptProjectContext(capsule);
     case "claude-project-context":
       return renderClaudeProjectContext(capsule);
+    case "gemini-context":
+      return renderGeminiContext(capsule);
     default: {
       const exhaustive: never = presetId;
       return exhaustive;
@@ -512,6 +516,27 @@ function renderClaudeProjectContext(capsule: WorkCapsuleV1): string {
     renderActionSection("Next Actions", capsule.nextActions),
     renderArtifactSection("Artifacts", capsule.artifacts),
     renderSourceSection(capsule, "Source Trace")
+  ]);
+}
+
+function renderGeminiContext(capsule: WorkCapsuleV1): string {
+  return renderBridgeDocument("Gemini Context", [
+    renderScalarSection(
+      "How To Use",
+      "Paste this locally generated Work Capsule into Gemini or a Gemini workspace-style session as user-provided context. It does not connect to Gemini, update any workspace, or automate provider UI."
+    ),
+    renderScalarSection("Title", capsule.title),
+    ...renderOptionalScalarSections("Project", capsule.project),
+    renderScalarSection("Goal", capsule.goal),
+    renderScalarSection("Instructions For Gemini", capsule.contextPrompt),
+    renderStringListSection("Reusable Context", capsule.reusableContext),
+    renderItemSection("Decisions", capsule.decisions),
+    renderItemSection("Constraints", capsule.constraints),
+    renderItemSection("Facts", capsule.facts),
+    renderItemSection("Open Questions", capsule.openQuestions),
+    renderActionSection("Next Actions", capsule.nextActions),
+    renderArtifactSection("Artifacts", capsule.artifacts),
+    renderSourceSection(capsule, "Source")
   ]);
 }
 

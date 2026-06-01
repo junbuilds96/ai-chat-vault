@@ -10,7 +10,8 @@ Work Capsule bridge presets are deterministic local text renderings of `work-cap
 - **Generic AI context**: a provider-neutral handoff prompt plus the capsule fields and source trace.
 - **ChatGPT Project-style context**: a project-oriented rendering for manual paste into ChatGPT Project context or instructions.
 - **Claude Project-style context**: a project-knowledge rendering for manual paste into Claude Project knowledge.
+- **Gemini context**: a Gemini-oriented rendering for manual paste into Gemini or Gemini workspace-style sessions.
 
 ## Boundary
 
-The presets do not automate ChatGPT Projects, Claude Projects, Gemini, MCP, uploads, project membership, or provider-side memory. Copying a preset is user-initiated clipboard output from local capsule data. Future provider-specific work should keep this boundary unless the product direction explicitly changes the privacy and permission model.
+The presets do not automate ChatGPT Projects, Claude Projects, Gemini, MCP, uploads, project membership, or provider-side memory. The Gemini preset is a local-only text rendering, not a Gemini integration: it does not call Gemini APIs, inspect Gemini pages, add Gemini host permissions, upload files, update workspace memory, or send analytics. Copying a preset is user-initiated clipboard output from local capsule data. Future provider-specific work should keep this boundary unless the product direction explicitly changes the privacy and permission model.
