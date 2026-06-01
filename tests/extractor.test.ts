@@ -26,6 +26,54 @@ describe("conversation extraction", () => {
     ]);
   });
 
+  it("collects ChatGPT turn containers when the role marker and message text are separate descendants", () => {
+    document.body.innerHTML = `
+      <main>
+        <article data-testid="conversation-turn-1">
+          <div data-message-author-role="user"></div>
+          <div class="whitespace-pre-wrap">Question from hydrated turn</div>
+        </article>
+        <article data-testid="conversation-turn-2">
+          <div data-message-author-role="assistant"></div>
+          <div class="markdown">
+            <p>Answer from hydrated turn</p>
+          </div>
+        </article>
+      </main>
+    `;
+
+    expect(document.querySelectorAll("[data-message-author-role]")).toHaveLength(2);
+    expect(collectMessages(document)).toEqual([
+      { speaker: "user", text: "Question from hydrated turn" },
+      { speaker: "assistant", text: "Answer from hydrated turn" }
+    ]);
+  });
+
+  it("collects role-tagged messages when ChatGPT wraps the role marker and text in an unlabelled turn", () => {
+    document.body.innerHTML = `
+      <main>
+        <div class="turn-wrapper">
+          <div data-message-author-role="user"></div>
+          <div>
+            <div class="whitespace-pre-wrap">Question in unlabelled wrapper</div>
+          </div>
+        </div>
+        <div class="turn-wrapper">
+          <div data-message-author-role="assistant"></div>
+          <div>
+            <div class="markdown"><p>Answer in unlabelled wrapper</p></div>
+          </div>
+        </div>
+      </main>
+    `;
+
+    expect(document.querySelectorAll("[data-message-author-role]")).toHaveLength(2);
+    expect(collectMessages(document)).toEqual([
+      { speaker: "user", text: "Question in unlabelled wrapper" },
+      { speaker: "assistant", text: "Answer in unlabelled wrapper" }
+    ]);
+  });
+
   it("wraps preformatted blocks as fenced Markdown", () => {
     document.body.innerHTML = `
       <article data-message-author-role="assistant">

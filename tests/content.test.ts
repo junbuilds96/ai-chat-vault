@@ -13,6 +13,26 @@ function setupConversationPage(): void {
   `;
 }
 
+function appendConversationPage(): void {
+  document.body.insertAdjacentHTML(
+    "beforeend",
+    `
+      <main>
+        <div data-message-author-role="user" dir="auto" class="text-message">
+          <div class="user-message-bubble-color">
+            <div class="whitespace-pre-wrap">Question after reload</div>
+          </div>
+        </div>
+        <div data-message-author-role="assistant" data-turn-start-message="true" dir="auto" class="text-message">
+          <div class="markdown prose">
+            <p>Answer after reload</p>
+          </div>
+        </div>
+      </main>
+    `
+  );
+}
+
 async function loadContentScript(): Promise<void> {
   vi.resetModules();
   await import("../src/content");
@@ -40,6 +60,14 @@ function previewMarkdown(): string {
     throw new Error("Missing preview textarea");
   }
   return preview.value;
+}
+
+function captureStatus(): string {
+  const status = document.querySelector<HTMLElement>("#ai-chat-vault .acv-status");
+  if (!status) {
+    throw new Error("Missing capture status");
+  }
+  return status.textContent ?? "";
 }
 
 function readBlobText(blob: Blob): Promise<string> {
@@ -77,6 +105,7 @@ describe("content script selected-message controls", () => {
 
     await loadContentScript();
     actionButton("capture").click();
+    await flushAsyncClick();
 
     expect(messageCheckboxes().map((checkbox) => checkbox.checked)).toEqual([true, true, true]);
 
@@ -109,6 +138,7 @@ describe("content script selected-message controls", () => {
 
     await loadContentScript();
     actionButton("capture").click();
+    await flushAsyncClick();
     actionButton("select-none").click();
 
     const firstCheckbox = messageCheckboxes()[0];
@@ -125,5 +155,22 @@ describe("content script selected-message controls", () => {
     expect(downloadedMarkdown).toContain("## Assistant\n\nAnswer two");
     expect(downloadedMarkdown).toContain("## User\n\nFollow-up three");
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:ai-chat-vault-test");
+  });
+
+  it("captures ChatGPT role-tagged messages that are added after content script injection", async () => {
+    document.body.innerHTML = "";
+
+    await loadContentScript();
+    appendConversationPage();
+
+    expect(document.querySelectorAll("[data-message-author-role]")).toHaveLength(2);
+
+    actionButton("capture").click();
+    await flushAsyncClick();
+
+    expect(captureStatus()).toBe("Captured 2 messages");
+    expect(previewMarkdown()).toContain("## User\n\nQuestion after reload");
+    expect(previewMarkdown()).toContain("## Assistant\n\nAnswer after reload");
+    expect(previewMarkdown()).not.toContain("_No conversation messages were detected._");
   });
 });

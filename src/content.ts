@@ -9,6 +9,8 @@ import {
 } from "./selection";
 
 const ROOT_ID = "ai-chat-vault";
+const CHATGPT_MESSAGE_SELECTOR = "[data-message-author-role]";
+const CAPTURE_SETTLE_TIMEOUT_MS = 1500;
 
 interface PanelState {
   conversation: ConversationExport | null;
@@ -68,7 +70,7 @@ async function handlePanelClick(event: MouseEvent): Promise<void> {
   const action = button.dataset.acvAction;
   try {
     if (action === "capture") {
-      capture();
+      await capture();
       return;
     }
 
@@ -78,7 +80,7 @@ async function handlePanelClick(event: MouseEvent): Promise<void> {
     }
 
     if (!state.conversation) {
-      capture();
+      await capture();
     }
 
     if (action === "copy") {
@@ -116,8 +118,72 @@ function handlePanelChange(event: Event): void {
   updatePreviewFromSelection();
 }
 
-function capture(): void {
-  const conversation = extractConversation(document);
+async function capture(): Promise<void> {
+  setStatus("Capturing conversation...");
+  const conversation = await extractConversationAfterPageSettles(captureDocument());
+  updateCapturedConversation(conversation);
+}
+
+async function extractConversationAfterPageSettles(
+  documentRef: Document
+): Promise<ConversationExport> {
+  const conversation = extractConversation(documentRef);
+  if (conversation.messages.length > 0 || !hasChatGptMessageNodes(documentRef)) {
+    return conversation;
+  }
+
+  await waitForExtractableMessages(documentRef);
+  return extractConversation(documentRef);
+}
+
+function captureDocument(): Document {
+  return document.getElementById(ROOT_ID)?.ownerDocument ?? document;
+}
+
+function hasChatGptMessageNodes(documentRef: Document): boolean {
+  return documentRef.querySelector(CHATGPT_MESSAGE_SELECTOR) !== null;
+}
+
+function waitForExtractableMessages(documentRef: Document): Promise<void> {
+  const root = documentRef.body ?? documentRef.documentElement;
+  if (!root || typeof MutationObserver === "undefined") {
+    return new Promise((resolve) => window.setTimeout(resolve, 0));
+  }
+
+  return new Promise((resolve) => {
+    let completed = false;
+    const finish = (): void => {
+      if (completed) {
+        return;
+      }
+
+      completed = true;
+      observer.disconnect();
+      window.clearTimeout(timeout);
+      resolve();
+    };
+
+    const check = (): void => {
+      if (extractConversation(documentRef).messages.length > 0) {
+        finish();
+      }
+    };
+
+    const observer = new MutationObserver(check);
+    const timeout = window.setTimeout(finish, CAPTURE_SETTLE_TIMEOUT_MS);
+
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ["aria-hidden", "class", "data-message-author-role", "hidden"],
+      characterData: true,
+      childList: true,
+      subtree: true
+    });
+    queueMicrotask(check);
+  });
+}
+
+function updateCapturedConversation(conversation: ConversationExport): void {
   state.conversation = conversation;
   state.selectedMessageIndexes = allMessageIndexes(conversation.messages.length);
   state.title = conversation.title;
@@ -146,10 +212,6 @@ function downloadMarkdown(): void {
 }
 
 function selectedMarkdown(): string {
-  if (!state.conversation) {
-    capture();
-  }
-
   const conversation = selectedConversation();
   state.markdown = conversationToMarkdown(conversation);
   preview().value = state.markdown;

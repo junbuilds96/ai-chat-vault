@@ -12,11 +12,14 @@ export interface ConversationExport {
   messages: ConversationMessage[];
 }
 
+const MESSAGE_ROLE_SELECTOR = "[data-message-author-role]";
 const MESSAGE_SELECTOR = [
-  "[data-message-author-role]",
+  MESSAGE_ROLE_SELECTOR,
   "[data-testid^='conversation-turn-']",
   ".text-base"
 ].join(",");
+const MESSAGE_CONTAINER_SELECTOR = "[data-testid^='conversation-turn-'], article";
+const MESSAGE_ANCESTOR_BOUNDARY_SELECTOR = "main, body, html";
 
 const ROLE_LABELS: Record<Speaker, string> = {
   user: "User",
@@ -59,7 +62,7 @@ export function collectMessages(documentRef: Document): ConversationMessage[] {
       continue;
     }
 
-    const text = normalizeMessageText(element);
+    const text = extractMessageText(element);
     if (!text) {
       continue;
     }
@@ -145,6 +148,39 @@ export function normalizeMessageText(element: HTMLElement): string {
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function extractMessageText(element: HTMLElement): string {
+  for (const candidate of messageTextCandidates(element)) {
+    const text = normalizeMessageText(candidate) || fallbackMessageText(candidate);
+    if (text) {
+      return text;
+    }
+  }
+
+  return "";
+}
+
+function messageTextCandidates(element: HTMLElement): HTMLElement[] {
+  const candidates = [element];
+
+  for (
+    let ancestor = element.parentElement;
+    ancestor && !ancestor.matches(MESSAGE_ANCESTOR_BOUNDARY_SELECTOR);
+    ancestor = ancestor.parentElement
+  ) {
+    if (ancestor.querySelectorAll(MESSAGE_ROLE_SELECTOR).length !== 1) {
+      break;
+    }
+
+    candidates.push(ancestor);
+
+    if (ancestor.matches(MESSAGE_CONTAINER_SELECTOR)) {
+      break;
+    }
+  }
+
+  return candidates;
 }
 
 function replaceElementWithText(element: Element, text: string): void {
@@ -272,6 +308,10 @@ function normalizeBlockText(value: string): string {
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function fallbackMessageText(element: HTMLElement): string {
+  return normalizeBlockText(elementText(element));
 }
 
 function elementText(element: Element): string {
@@ -423,10 +463,16 @@ function detectSpeaker(element: HTMLElement): Speaker | null {
   }
 
   const labelledBy = element.getAttribute("aria-label") ?? "";
-  const ancestor = element.closest<HTMLElement>("[data-message-author-role]");
+  const ancestor = element.closest<HTMLElement>(MESSAGE_ROLE_SELECTOR);
   const ancestorRole = ancestor?.getAttribute("data-message-author-role")?.toLowerCase();
   if (isSpeaker(ancestorRole)) {
     return ancestorRole;
+  }
+
+  const descendant = element.querySelector<HTMLElement>(MESSAGE_ROLE_SELECTOR);
+  const descendantRole = descendant?.getAttribute("data-message-author-role")?.toLowerCase();
+  if (isSpeaker(descendantRole)) {
+    return descendantRole;
   }
 
   const testId = element.getAttribute("data-testid") ?? "";
