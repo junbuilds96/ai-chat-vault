@@ -209,6 +209,49 @@ export async function listWorkCapsules(): Promise<WorkCapsuleIndexItem[]> {
   return loadWorkCapsuleIndex(storage);
 }
 
+export async function findMostRecentWorkCapsuleBySourceUrl(
+  sourceUrl: string
+): Promise<WorkCapsuleV1 | null> {
+  const storage = chromeStorageLocal();
+  if (!storage) {
+    return null;
+  }
+
+  const sourceIdentity = workCapsuleSourceIdentity(sourceUrl);
+  if (!sourceIdentity) {
+    return null;
+  }
+
+  const matchingIndexItems = (await loadWorkCapsuleIndex(storage)).filter(
+    (item) => workCapsuleSourceIdentity(item.sourceUrl) === sourceIdentity
+  );
+
+  for (const item of matchingIndexItems) {
+    const storedValue = await storageGet(storage, workCapsuleBodyKey(item.id)).catch(() => null);
+    const result = validateWorkCapsuleV1(storedValue);
+    if (result.ok && workCapsuleSourceIdentity(result.capsule.source.url) === sourceIdentity) {
+      return result.capsule;
+    }
+  }
+
+  return null;
+}
+
+export function workCapsuleSourceIdentity(sourceUrl: string): string {
+  const trimmed = sourceUrl.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  try {
+    const url = new URL(trimmed);
+    const pathname = url.pathname.replace(/\/+$/g, "") || "/";
+    return compactString(`${url.hostname}${pathname}`).toLowerCase();
+  } catch {
+    return compactString(trimmed).toLowerCase();
+  }
+}
+
 export async function updateWorkCapsule(
   id: string,
   patch: Partial<WorkCapsuleV1>

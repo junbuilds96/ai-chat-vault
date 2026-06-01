@@ -47,7 +47,7 @@ The popup includes a compact **Prompt Library** with default snippets such as `/
 
 After capture, **Work Capsule** appears with a **Create Capsule** action. Check the messages you want in the capsule, then create a local draft with structured editable fields for title, goal, reusable context, decisions, constraints, facts, open questions, next actions, and artifacts. The draft records `selectedTurnIds` such as `message-1` and stores selected excerpts only for checked messages, not the full raw transcript.
 
-Use **Save capsule** to persist the draft in `chrome.storage.local`, **Copy context** for a compact reusable context block, **Copy Markdown** for the rendered capsule, or **Download capsule** for a local `.md` file. If no messages are checked, capsule creation shows the same selection error as export: `Select at least one message to export`. The loop is deterministic and local-only; it does not call a backend, cloud service, analytics endpoint, remote LLM, `fetch`, or `XMLHttpRequest`.
+Use **Save capsule** to persist the draft in `chrome.storage.local`, **Copy context** for a compact reusable context block, **Copy Markdown** for the rendered capsule, or **Download capsule** for a local `.md` file. When a saved capsule already matches the captured conversation URL, the popup shows it as a recent capsule with **Reopen** so you can resume that local draft. If no messages are checked, capsule creation shows the same selection error as export: `Select at least one message to export`. The loop is deterministic and local-only; it does not call a backend, cloud service, analytics endpoint, remote LLM, `fetch`, or `XMLHttpRequest`.
 
 ## Development
 

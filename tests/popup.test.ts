@@ -8,7 +8,12 @@ import {
 } from "../src/messages";
 import { CONVERSATION_NOTES_STORAGE_KEY, conversationNoteIdentity } from "../src/notes";
 import { PROMPT_SNIPPETS_STORAGE_KEY } from "../src/prompts";
-import { WORK_CAPSULE_INDEX_KEY } from "../src/workCapsules";
+import {
+  WORK_CAPSULE_INDEX_KEY,
+  WORK_CAPSULE_SCHEMA_VERSION,
+  type WorkCapsuleV1,
+  workCapsuleBodyKey
+} from "../src/workCapsules";
 
 const conversation = {
   title: "Popup Test - ChatGPT",
@@ -20,6 +25,54 @@ const conversation = {
     { speaker: "user" as const, text: "Follow-up three" }
   ]
 };
+
+function workCapsule(overrides: Partial<WorkCapsuleV1> = {}): WorkCapsuleV1 {
+  return {
+    schemaVersion: WORK_CAPSULE_SCHEMA_VERSION,
+    id: "capsule-saved",
+    title: "Saved Retrieval Capsule",
+    goal: "Resume the saved work capsule from this conversation.",
+    reusableContext: ["Existing reusable context"],
+    decisions: [{ id: "decision-1", text: "Keep the retrieval path local-only." }],
+    constraints: [{ id: "constraint-1", text: "Do not create a new capsule automatically." }],
+    facts: [{ id: "fact-1", text: "The saved capsule belongs to this ChatGPT URL." }],
+    openQuestions: [{ id: "question-1", text: "What should happen after reopening?" }],
+    nextActions: [
+      {
+        id: "action-1",
+        text: "Continue from the saved context.",
+        status: "todo",
+        owner: "user"
+      }
+    ],
+    artifacts: [
+      {
+        id: "artifact-1",
+        type: "other",
+        title: "Saved artifact",
+        body: "Artifact body"
+      }
+    ],
+    source: {
+      provider: "chatgpt",
+      title: conversation.title,
+      url: "https://chatgpt.com/c/test?model=gpt-5#work",
+      selectedTurnIds: ["message-2"]
+    },
+    sourceExcerptPolicy: "selected-excerpts",
+    excerpts: [
+      {
+        id: "excerpt-2",
+        turnId: "message-2",
+        role: "assistant",
+        text: "Answer two"
+      }
+    ],
+    createdAt: "2026-06-01T00:00:00.000Z",
+    updatedAt: "2026-06-01T02:00:00.000Z",
+    ...overrides
+  };
+}
 
 function installChromeMock(
   tabUrl = "https://chatgpt.com/c/test",
@@ -195,6 +248,14 @@ function workCapsuleFields(): HTMLElement {
   return fields;
 }
 
+function workCapsuleRecent(): HTMLElement {
+  const recent = document.querySelector<HTMLElement>(".acv-work-capsule-recent");
+  if (!recent) {
+    throw new Error("Missing recent work capsule panel");
+  }
+  return recent;
+}
+
 function capsuleField(field: string): HTMLInputElement | HTMLTextAreaElement {
   const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
     `[data-acv-capsule-field="${field}"]`
@@ -271,11 +332,9 @@ function readBlobText(blob: Blob): Promise<string> {
 }
 
 async function flushAsyncClick(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let index = 0; index < 20; index += 1) {
+    await Promise.resolve();
+  }
 }
 
 async function flushPromptLoad(): Promise<void> {
@@ -663,6 +722,57 @@ describe("toolbar popup", () => {
       })
     ]);
     expect(status()).toBe("Saved capsule locally");
+  });
+
+  it("shows and reopens the most recent saved Work Capsule for the captured conversation", async () => {
+    const saved = workCapsule();
+    installChromeMock("https://chatgpt.com/c/test?model=gpt-5", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: saved.id,
+          title: saved.title,
+          goal: saved.goal,
+          sourceTitle: saved.source.title,
+          sourceUrl: "https://chatgpt.com/c/test/",
+          createdAt: saved.createdAt,
+          updatedAt: saved.updatedAt
+        }
+      ],
+      [workCapsuleBodyKey(saved.id)]: saved
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+
+    expect(workCapsuleSection().hidden).toBe(false);
+    expect(workCapsuleFields().hidden).toBe(true);
+    expect(workCapsuleRecent().hidden).toBe(false);
+    expect(workCapsuleRecent().textContent).toBe(
+      "Saved Retrieval CapsuleUpdated 2026-06-01T02:00:00.000ZReopen"
+    );
+    expect(document.querySelector("[data-acv-work-capsule-context]")?.textContent).toBe(
+      "Recent capsule available"
+    );
+
+    button("reopen-capsule").click();
+    await flushAsyncClick();
+
+    expect(workCapsuleRecent().hidden).toBe(true);
+    expect(workCapsuleFields().hidden).toBe(false);
+    expect(capsuleField("title").value).toBe("Saved Retrieval Capsule");
+    expect(capsuleField("goal").value).toBe(
+      "Resume the saved work capsule from this conversation."
+    );
+    expect(capsuleField("facts").value).toBe(
+      "The saved capsule belongs to this ChatGPT URL."
+    );
+    expect(capsuleField("nextActions").value).toBe("Continue from the saved context.");
+    expect(document.querySelector("[data-acv-work-capsule-context]")?.textContent).toBe(
+      "1 selected turn"
+    );
+    expect(status()).toBe("Reopened saved capsule");
   });
 
   it("copies Work Capsule context and Markdown", async () => {

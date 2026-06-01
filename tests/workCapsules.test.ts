@@ -5,12 +5,14 @@ import {
   type WorkCapsuleV1,
   createWorkCapsule,
   deleteWorkCapsule,
+  findMostRecentWorkCapsuleBySourceUrl,
   getWorkCapsule,
   listWorkCapsules,
   renderWorkCapsuleMarkdown,
   updateWorkCapsule,
   validateWorkCapsuleV1,
-  workCapsuleBodyKey
+  workCapsuleBodyKey,
+  workCapsuleSourceIdentity
 } from "../src/workCapsules";
 
 function capsule(overrides: Partial<WorkCapsuleV1> = {}): WorkCapsuleV1 {
@@ -287,6 +289,107 @@ describe("work capsule storage", () => {
     });
 
     vi.useRealTimers();
+  });
+
+  it("finds the newest valid capsule for a source URL while ignoring query and hash", async () => {
+    installStorageMock();
+    const older = capsule({
+      id: "capsule-older",
+      title: "Older Capsule",
+      source: {
+        ...capsule().source,
+        url: "https://chatgpt.com/c/local-planning?model=gpt-4"
+      },
+      createdAt: "2026-06-01T00:00:00.000Z",
+      updatedAt: "2026-06-01T01:00:00.000Z"
+    });
+    const newest = capsule({
+      id: "capsule-newest",
+      title: "Newest Capsule",
+      source: {
+        ...capsule().source,
+        url: "https://chatgpt.com/c/local-planning/#work"
+      },
+      createdAt: "2026-06-01T00:30:00.000Z",
+      updatedAt: "2026-06-01T03:00:00.000Z"
+    });
+    const otherConversation = capsule({
+      id: "capsule-other",
+      title: "Other Conversation",
+      source: {
+        ...capsule().source,
+        url: "https://chatgpt.com/c/other-planning"
+      },
+      createdAt: "2026-06-01T00:00:00.000Z",
+      updatedAt: "2026-06-01T04:00:00.000Z"
+    });
+
+    await createWorkCapsule(older);
+    await createWorkCapsule(newest);
+    await createWorkCapsule(otherConversation);
+
+    await expect(
+      findMostRecentWorkCapsuleBySourceUrl("https://chatgpt.com/c/local-planning?model=gpt-5#latest")
+    ).resolves.toEqual(newest);
+  });
+
+  it("skips stale index entries and invalid capsule bodies during source URL lookup", async () => {
+    const storage = installStorageMock({
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: "missing-body",
+          title: "Missing Body",
+          goal: "Ignore this entry.",
+          sourceTitle: "ChatGPT planning chat",
+          sourceUrl: "https://chatgpt.com/c/local-planning",
+          createdAt: "2026-06-01T00:00:00.000Z",
+          updatedAt: "2026-06-01T05:00:00.000Z"
+        },
+        {
+          id: "invalid-body",
+          title: "Invalid Body",
+          goal: "Ignore this invalid capsule.",
+          sourceTitle: "ChatGPT planning chat",
+          sourceUrl: "https://chatgpt.com/c/local-planning",
+          createdAt: "2026-06-01T00:00:00.000Z",
+          updatedAt: "2026-06-01T04:00:00.000Z"
+        },
+        {
+          id: "valid-body",
+          title: "Valid Body",
+          goal: "Use this capsule.",
+          sourceTitle: "ChatGPT planning chat",
+          sourceUrl: "https://chatgpt.com/c/local-planning",
+          createdAt: "2026-06-01T00:00:00.000Z",
+          updatedAt: "2026-06-01T03:00:00.000Z"
+        }
+      ],
+      [workCapsuleBodyKey("invalid-body")]: { ...capsule(), id: "invalid-body", title: "" },
+      [workCapsuleBodyKey("valid-body")]: capsule({
+        id: "valid-body",
+        title: "Valid Body",
+        goal: "Use this capsule.",
+        source: {
+          ...capsule().source,
+          url: "https://chatgpt.com/c/local-planning?model=gpt-5"
+        },
+        updatedAt: "2026-06-01T03:00:00.000Z"
+      })
+    });
+
+    await expect(
+      findMostRecentWorkCapsuleBySourceUrl("https://chatgpt.com/c/local-planning#thread")
+    ).resolves.toEqual(storage.store[workCapsuleBodyKey("valid-body")]);
+  });
+
+  it("normalizes source URL identities without query strings, hash fragments, or trailing slashes", () => {
+    expect(workCapsuleSourceIdentity(" https://chatgpt.com/c/local-planning/?model=gpt-5#work ")).toBe(
+      "chatgpt.com/c/local-planning"
+    );
+    expect(workCapsuleSourceIdentity("https://chatgpt.com/c/local-planning")).toBe(
+      "chatgpt.com/c/local-planning"
+    );
+    expect(workCapsuleSourceIdentity("not a url  with  spaces")).toBe("not a url with spaces");
   });
 
   it("does not use fetch or XMLHttpRequest while using storage helpers", async () => {
