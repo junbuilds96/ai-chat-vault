@@ -1439,7 +1439,8 @@ function renderWorkCapsuleLibrary(container: HTMLDivElement): void {
   const title = document.createElement("strong");
   title.textContent = "Library";
 
-  const count = Math.min(state.workCapsuleLibrary.length, WORK_CAPSULE_LIBRARY_LIMIT);
+  const visibleCapsules = state.workCapsuleLibrary.slice(0, WORK_CAPSULE_LIBRARY_LIMIT);
+  const count = visibleCapsules.length;
   const summary = document.createElement("span");
   summary.textContent = `${count} recent saved capsule${count === 1 ? "" : "s"}`;
 
@@ -1448,11 +1449,56 @@ function renderWorkCapsuleLibrary(container: HTMLDivElement): void {
   const list = document.createElement("div");
   list.className = "acv-work-capsule-library-list";
 
-  state.workCapsuleLibrary.slice(0, WORK_CAPSULE_LIBRARY_LIMIT).forEach((capsule) => {
-    list.append(renderWorkCapsuleLibraryRow(capsule));
+  groupWorkCapsuleLibraryItems(visibleCapsules).forEach((group) => {
+    const groupElement = document.createElement("div");
+    groupElement.className = "acv-work-capsule-library-group";
+
+    const groupHeading = document.createElement("div");
+    groupHeading.className = "acv-work-capsule-library-group-heading";
+    groupHeading.dataset.acvWorkCapsuleLibraryGroup = group.heading;
+    groupHeading.textContent = group.heading;
+
+    const groupRows = document.createElement("div");
+    groupRows.className = "acv-work-capsule-library-group-rows";
+    group.items.forEach((capsule) => {
+      groupRows.append(renderWorkCapsuleLibraryRow(capsule));
+    });
+
+    groupElement.append(groupHeading, groupRows);
+    list.append(groupElement);
   });
 
   container.append(heading, list);
+}
+
+function groupWorkCapsuleLibraryItems(
+  capsules: WorkCapsuleIndexItem[]
+): Array<{ heading: string; items: WorkCapsuleIndexItem[] }> {
+  const groups: Array<{ heading: string; items: WorkCapsuleIndexItem[] }> = [];
+  const groupByHeading = new Map<string, { heading: string; items: WorkCapsuleIndexItem[] }>();
+
+  capsules.forEach((capsule) => {
+    const heading = workCapsuleLibraryGroupHeading(capsule);
+    const existingGroup = groupByHeading.get(heading);
+    if (existingGroup) {
+      existingGroup.items.push(capsule);
+      return;
+    }
+
+    const group = { heading, items: [capsule] };
+    groups.push(group);
+    groupByHeading.set(heading, group);
+  });
+
+  return groups;
+}
+
+function workCapsuleLibraryGroupHeading(capsule: WorkCapsuleIndexItem): string {
+  return (
+    compactFieldLine(capsule.project ?? "") ||
+    compactFieldLine(capsule.sourceTitle) ||
+    "Unknown source"
+  );
 }
 
 function renderWorkCapsuleLibraryRow(capsule: WorkCapsuleIndexItem): HTMLDivElement {

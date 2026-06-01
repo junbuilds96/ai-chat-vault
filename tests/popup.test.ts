@@ -282,6 +282,35 @@ function libraryRows(): HTMLElement[] {
   return Array.from(document.querySelectorAll<HTMLElement>(".acv-work-capsule-library-row"));
 }
 
+function libraryGroupHeadings(): HTMLElement[] {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>("[data-acv-work-capsule-library-group]")
+  );
+}
+
+function libraryGroupRows(groupHeading: string): HTMLElement[] {
+  const heading = libraryGroupHeadings().find(
+    (element) => element.textContent === groupHeading
+  );
+  const group = heading?.closest<HTMLElement>(".acv-work-capsule-library-group");
+  if (!group) {
+    throw new Error(`Missing Work Capsule Library group ${groupHeading}`);
+  }
+
+  return Array.from(group.querySelectorAll<HTMLElement>(".acv-work-capsule-library-row"));
+}
+
+function libraryRowButton(row: HTMLElement, action: string): HTMLButtonElement {
+  const rowButton = row.querySelector<HTMLButtonElement>(
+    `button[data-acv-action="${action}"]`
+  );
+  if (!rowButton) {
+    throw new Error(`Missing Work Capsule Library row ${action} button`);
+  }
+
+  return rowButton;
+}
+
 function libraryButtons(action: string): HTMLButtonElement[] {
   return Array.from(
     document.querySelectorAll<HTMLButtonElement>(`button[data-acv-action="${action}"]`)
@@ -911,6 +940,16 @@ describe("toolbar popup", () => {
 
     expect(workCapsuleLibrary().hidden).toBe(false);
     expect(workCapsuleLibrary().textContent).toContain("Library");
+    expect(libraryGroupHeadings().map((heading) => heading.textContent)).toEqual([
+      "Client Launch",
+      "Popup Test - ChatGPT"
+    ]);
+    expect(libraryGroupRows("Client Launch").map((row) => row.dataset.acvCapsuleId)).toEqual([
+      "capsule-other"
+    ]);
+    expect(
+      libraryGroupRows("Popup Test - ChatGPT").map((row) => row.dataset.acvCapsuleId)
+    ).toEqual(["capsule-saved"]);
     expect(libraryRows()).toHaveLength(2);
     expect(libraryRows()[0].dataset.acvCapsuleId).toBe("capsule-other");
     expect(libraryRows()[0].textContent).toBe(
@@ -928,6 +967,123 @@ describe("toolbar popup", () => {
       )
     ).toEqual(["Reopen", "Copy context", "Copy source", "Remove"]);
     expect(workCapsuleRecent().hidden).toBe(false);
+  });
+
+  it("keeps Work Capsule Library actions working from grouped rows", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirm);
+    const projectCapsule = workCapsule({
+      id: "capsule-grouped-project",
+      title: "Grouped Project Capsule",
+      project: "Grouped Project",
+      goal: "Reopen this capsule from its project group.",
+      contextPrompt: "Project grouped context prompt.",
+      source: {
+        ...workCapsule().source,
+        title: "Project source thread",
+        url: "https://chatgpt.com/c/grouped-project"
+      },
+      updatedAt: "2026-06-01T05:00:00.000Z"
+    });
+    const sourceCapsule = workCapsule({
+      id: "capsule-grouped-source",
+      title: "Grouped Source Capsule",
+      goal: "Copy and remove this capsule from its source-title group.",
+      contextPrompt: "Source grouped context prompt.",
+      source: {
+        ...workCapsule().source,
+        title: "Source Thread Heading",
+        url: "https://chatgpt.com/c/grouped-source",
+        selectedTurnIds: ["message-1"]
+      },
+      updatedAt: "2026-06-01T04:00:00.000Z"
+    });
+    const chromeMock = installChromeMock("https://chatgpt.com/c/test", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: projectCapsule.id,
+          title: projectCapsule.title,
+          project: projectCapsule.project,
+          goal: projectCapsule.goal,
+          sourceTitle: projectCapsule.source.title,
+          sourceUrl: projectCapsule.source.url,
+          createdAt: projectCapsule.createdAt,
+          updatedAt: projectCapsule.updatedAt
+        },
+        {
+          id: sourceCapsule.id,
+          title: sourceCapsule.title,
+          goal: sourceCapsule.goal,
+          sourceTitle: sourceCapsule.source.title,
+          sourceUrl: sourceCapsule.source.url,
+          createdAt: sourceCapsule.createdAt,
+          updatedAt: sourceCapsule.updatedAt
+        }
+      ],
+      [workCapsuleBodyKey(projectCapsule.id)]: projectCapsule,
+      [workCapsuleBodyKey(sourceCapsule.id)]: sourceCapsule
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+
+    expect(libraryGroupHeadings().map((heading) => heading.textContent)).toEqual([
+      "Grouped Project",
+      "Source Thread Heading"
+    ]);
+
+    libraryRowButton(libraryGroupRows("Grouped Project")[0], "reopen-library-capsule").click();
+    await flushAsyncClick();
+
+    expect(workCapsuleFields().hidden).toBe(false);
+    expect(capsuleField("title").value).toBe("Grouped Project Capsule");
+    expect(capsuleField("project").value).toBe("Grouped Project");
+    expect(status()).toBe("Reopened saved capsule");
+
+    libraryRowButton(
+      libraryGroupRows("Source Thread Heading")[0],
+      "copy-library-capsule-context"
+    ).click();
+    await flushAsyncClick();
+
+    expect(writeText.mock.calls[0][0]).toContain("# Generic AI Context");
+    expect(writeText.mock.calls[0][0]).toContain(
+      "## Context Prompt\n\nSource grouped context prompt."
+    );
+    expect(status()).toBe("Copied Generic AI context to clipboard");
+
+    libraryRowButton(
+      libraryGroupRows("Source Thread Heading")[0],
+      "copy-library-capsule-source-citation"
+    ).click();
+    await flushAsyncClick();
+
+    expect(writeText.mock.calls[1][0]).toBe(
+      "Work Capsule: Grouped Source Capsule | Source conversation: Source Thread Heading | Source URL: https://chatgpt.com/c/grouped-source | Selected turn IDs: message-1 | Updated: 2026-06-01T04:00:00.000Z"
+    );
+    expect(status()).toBe("Copied source citation to clipboard");
+
+    libraryRowButton(libraryGroupRows("Source Thread Heading")[0], "remove-library-capsule").click();
+    await flushAsyncClick();
+
+    expect(confirm).toHaveBeenCalledWith(
+      'Remove saved Work Capsule "Grouped Source Capsule" from this browser?'
+    );
+    expect(chromeMock.store[workCapsuleBodyKey(sourceCapsule.id)]).toBeUndefined();
+    expect(chromeMock.store[WORK_CAPSULE_INDEX_KEY]).toEqual([
+      expect.objectContaining({ id: projectCapsule.id })
+    ]);
+    expect(libraryGroupHeadings().map((heading) => heading.textContent)).toEqual([
+      "Grouped Project"
+    ]);
+    expect(status()).toBe("Removed saved capsule locally");
   });
 
   it("reopens a Work Capsule Library body by id into the structured editor", async () => {
