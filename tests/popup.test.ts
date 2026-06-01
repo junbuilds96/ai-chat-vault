@@ -149,8 +149,24 @@ function preview(): string {
 }
 
 function promptPreview(): string {
-  const textarea = document.querySelector<HTMLTextAreaElement>("textarea[aria-label='Prompt preview']");
+  const textarea = document.querySelector<HTMLTextAreaElement>("textarea[data-acv-prompt-body]");
   return textarea?.value ?? "";
+}
+
+function promptTitleInput(): HTMLInputElement {
+  const input = document.querySelector<HTMLInputElement>("input[data-acv-prompt-title]");
+  if (!input) {
+    throw new Error("Missing prompt title input");
+  }
+  return input;
+}
+
+function promptBodyInput(): HTMLTextAreaElement {
+  const textarea = document.querySelector<HTMLTextAreaElement>("textarea[data-acv-prompt-body]");
+  if (!textarea) {
+    throw new Error("Missing prompt body input");
+  }
+  return textarea;
 }
 
 function promptSelect(): HTMLSelectElement {
@@ -421,6 +437,7 @@ describe("toolbar popup", () => {
       "/debug"
     ]);
     expect(promptPreview()).toBe("Summarize this local chat.");
+    expect(promptTitleInput().value).toBe("/summarize");
 
     promptSelect().value = "debug";
     promptSelect().dispatchEvent(new Event("change", { bubbles: true }));
@@ -448,5 +465,112 @@ describe("toolbar popup", () => {
       prompt: "Debug this issue."
     });
     expect(status()).toBe("Inserted prompt into ChatGPT");
+  });
+
+  it("creates prompt snippets locally and preserves copy and insert behavior", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+    const chromeMock = installChromeMock();
+
+    await loadPopup();
+    await flushPromptLoad();
+
+    button("new-prompt").click();
+    expect(promptTitleInput().value).toBe("/new-prompt");
+    expect(promptBodyInput().value).toBe("");
+
+    promptTitleInput().value = "review";
+    promptTitleInput().dispatchEvent(new Event("input", { bubbles: true }));
+    promptBodyInput().value = "Review this answer for correctness.";
+    promptBodyInput().dispatchEvent(new Event("input", { bubbles: true }));
+    expect(status()).toBe("Unsaved prompt changes");
+
+    button("save-prompt").click();
+    await flushAsyncClick();
+
+    const savedSnippets = chromeMock.store[PROMPT_SNIPPETS_STORAGE_KEY] as Array<{
+      id: string;
+      title: string;
+      body: string;
+    }>;
+    const savedSnippet = savedSnippets.find((snippet) => snippet.title === "/review");
+    expect(savedSnippet).toMatchObject({
+      title: "/review",
+      body: "Review this answer for correctness."
+    });
+    expect(Array.from(promptSelect().options).map((option) => option.textContent)).toContain(
+      "/review"
+    );
+    expect(status()).toBe("Saved prompt snippet locally");
+
+    button("copy-prompt").click();
+    await flushAsyncClick();
+    expect(writeText).toHaveBeenCalledWith("Review this answer for correctness.");
+
+    button("insert-prompt").click();
+    await flushAsyncClick();
+    expect(chromeMock.sendMessage).toHaveBeenCalledWith(
+      7,
+      {
+        type: INSERT_PROMPT_REQUEST_TYPE,
+        prompt: "Review this answer for correctness."
+      },
+      expect.any(Function)
+    );
+    expect(status()).toBe("Inserted prompt into ChatGPT");
+  });
+
+  it("edits existing prompt snippets in local storage", async () => {
+    const chromeMock = installChromeMock();
+
+    await loadPopup();
+    await flushPromptLoad();
+
+    promptSelect().value = "debug";
+    promptSelect().dispatchEvent(new Event("change", { bubbles: true }));
+    promptTitleInput().value = "/diagnose";
+    promptTitleInput().dispatchEvent(new Event("input", { bubbles: true }));
+    promptBodyInput().value = "Diagnose this with evidence first.";
+    promptBodyInput().dispatchEvent(new Event("input", { bubbles: true }));
+
+    button("save-prompt").click();
+    await flushAsyncClick();
+
+    expect(chromeMock.store[PROMPT_SNIPPETS_STORAGE_KEY]).toEqual([
+      { id: "summarize", title: "/summarize", body: "Summarize this local chat." },
+      { id: "debug", title: "/diagnose", body: "Diagnose this with evidence first." }
+    ]);
+    expect(Array.from(promptSelect().options).map((option) => option.textContent)).toEqual([
+      "/summarize",
+      "/diagnose"
+    ]);
+    expect(promptSelect().value).toBe("debug");
+    expect(promptPreview()).toBe("Diagnose this with evidence first.");
+    expect(status()).toBe("Saved prompt snippet locally");
+  });
+
+  it("deletes prompt snippets from local storage", async () => {
+    const chromeMock = installChromeMock();
+
+    await loadPopup();
+    await flushPromptLoad();
+
+    promptSelect().value = "summarize";
+    promptSelect().dispatchEvent(new Event("change", { bubbles: true }));
+    button("delete-prompt").click();
+    await flushAsyncClick();
+
+    expect(chromeMock.store[PROMPT_SNIPPETS_STORAGE_KEY]).toEqual([
+      { id: "debug", title: "/debug", body: "Debug this issue." }
+    ]);
+    expect(Array.from(promptSelect().options).map((option) => option.textContent)).toEqual([
+      "/debug"
+    ]);
+    expect(promptSelect().value).toBe("debug");
+    expect(promptPreview()).toBe("Debug this issue.");
+    expect(status()).toBe("Deleted prompt snippet");
   });
 });

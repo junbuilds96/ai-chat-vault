@@ -34,9 +34,11 @@ export async function loadPromptSnippets(): Promise<PromptSnippet[]> {
 
   try {
     const storedValue = await storageGet(storage, PROMPT_SNIPPETS_STORAGE_KEY);
-    const snippets = normalizePromptSnippets(storedValue);
-    if (snippets.length > 0) {
-      return snippets;
+    if (Array.isArray(storedValue)) {
+      const snippets = normalizePromptSnippets(storedValue);
+      if (storedValue.length === 0 || snippets.length > 0) {
+        return snippets;
+      }
     }
 
     const defaults = defaultPromptSnippets();
@@ -53,9 +55,8 @@ export async function savePromptSnippets(snippets: PromptSnippet[]): Promise<voi
     return;
   }
 
-  const normalized = normalizePromptSnippets(snippets);
   await storageSet(storage, {
-    [PROMPT_SNIPPETS_STORAGE_KEY]: normalized.length > 0 ? normalized : defaultPromptSnippets()
+    [PROMPT_SNIPPETS_STORAGE_KEY]: normalizePromptSnippets(snippets)
   });
 }
 

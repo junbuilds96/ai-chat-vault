@@ -17,7 +17,11 @@ import {
   isSupportedChatGptHost
 } from "./messages";
 import { conversationNoteIdentity, loadConversationNote, saveConversationNote } from "./notes";
-import { loadPromptSnippets, type PromptSnippet } from "./prompts";
+import {
+  loadPromptSnippets,
+  savePromptSnippets,
+  type PromptSnippet
+} from "./prompts";
 
 type MessageNavigatorRole = "all" | Speaker;
 
@@ -84,7 +88,13 @@ function initPopup(): void {
           <span>Local snippets</span>
         </div>
         <select aria-label="Prompt snippet" data-acv-prompt-select></select>
-        <textarea readonly aria-label="Prompt preview" data-acv-prompt-preview placeholder="Loading prompt snippets..."></textarea>
+        <input type="text" aria-label="Prompt slash command" data-acv-prompt-title placeholder="/shortcut" />
+        <textarea aria-label="Prompt body" data-acv-prompt-body data-acv-prompt-preview placeholder="Prompt body"></textarea>
+        <div class="acv-prompt-edit-actions">
+          <button type="button" data-acv-action="new-prompt">New</button>
+          <button type="button" data-acv-action="save-prompt">Save</button>
+          <button type="button" data-acv-action="delete-prompt">Delete</button>
+        </div>
         <div class="acv-prompt-actions">
           <button type="button" data-acv-action="copy-prompt">Copy prompt</button>
           <button type="button" data-acv-action="insert-prompt">Insert into ChatGPT</button>
@@ -149,6 +159,21 @@ async function handlePopupClick(event: MouseEvent): Promise<void> {
       return;
     }
 
+    if (action === "new-prompt") {
+      createPromptSnippet();
+      return;
+    }
+
+    if (action === "save-prompt") {
+      await saveCurrentPromptSnippet();
+      return;
+    }
+
+    if (action === "delete-prompt") {
+      await deleteCurrentPromptSnippet();
+      return;
+    }
+
     if (action === "insert-prompt") {
       await insertSelectedPromptIntoChatGpt();
       return;
@@ -189,6 +214,24 @@ function handlePopupInput(event: Event): void {
     return;
   }
 
+  const promptTitle = (event.target as HTMLElement).closest<HTMLInputElement>(
+    "input[data-acv-prompt-title]"
+  );
+  if (promptTitle) {
+    updateSelectedPromptSnippet({ title: promptTitle.value });
+    setStatus("Unsaved prompt changes");
+    return;
+  }
+
+  const promptBody = (event.target as HTMLElement).closest<HTMLTextAreaElement>(
+    "textarea[data-acv-prompt-body]"
+  );
+  if (promptBody) {
+    updateSelectedPromptSnippet({ body: promptBody.value });
+    setStatus("Unsaved prompt changes");
+    return;
+  }
+
   const note = (event.target as HTMLElement).closest<HTMLTextAreaElement>(
     "textarea[data-acv-conversation-note]"
   );
@@ -206,7 +249,7 @@ function handlePopupChange(event: Event): void {
   );
   if (select) {
     state.selectedSnippetId = select.value;
-    renderPromptPreview();
+    renderPromptEditor();
     return;
   }
 
@@ -719,6 +762,10 @@ function renderPromptLibrary(): void {
   const select = promptSelect();
   select.textContent = "";
 
+  if (!state.snippets.some((snippet) => snippet.id === state.selectedSnippetId)) {
+    state.selectedSnippetId = state.snippets[0]?.id ?? "";
+  }
+
   state.snippets.forEach((snippet) => {
     const option = document.createElement("option");
     option.value = snippet.id;
@@ -727,15 +774,81 @@ function renderPromptLibrary(): void {
   });
 
   select.value = state.selectedSnippetId;
-  renderPromptPreview();
+  renderPromptEditor();
 }
 
-function renderPromptPreview(): void {
-  promptPreview().value = selectedPromptBody({ allowEmpty: true });
+function renderPromptEditor(): void {
+  const snippet = selectedPromptSnippet();
+  promptTitleInput().value = snippet?.title ?? "";
+  promptBodyInput().value = snippet?.body ?? "";
+}
+
+function createPromptSnippet(): void {
+  const snippet = {
+    id: uniquePromptSnippetId(),
+    title: nextPromptSnippetTitle(),
+    body: ""
+  };
+  state.snippets = [...state.snippets, snippet];
+  state.selectedSnippetId = snippet.id;
+  renderPromptLibrary();
+  promptTitleInput().focus();
+  setStatus("New prompt snippet");
+}
+
+async function saveCurrentPromptSnippet(): Promise<void> {
+  const snippet = selectedPromptSnippet();
+  if (!snippet) {
+    throw new Error("No prompt snippet is selected");
+  }
+
+  const title = normalizedPromptTitle(promptTitleInput().value);
+  const body = promptBodyInput().value;
+  if (!title) {
+    throw new Error("Add a slash command before saving");
+  }
+
+  if (body.trim().length === 0) {
+    throw new Error("Add a prompt body before saving");
+  }
+
+  updateSelectedPromptSnippet({ title, body });
+  const selectedId = state.selectedSnippetId;
+  await savePromptSnippets(state.snippets);
+  state.snippets = await loadPromptSnippets();
+  state.selectedSnippetId = state.snippets.some((item) => item.id === selectedId)
+    ? selectedId
+    : state.snippets[0]?.id ?? "";
+  renderPromptLibrary();
+  setStatus("Saved prompt snippet locally");
+}
+
+async function deleteCurrentPromptSnippet(): Promise<void> {
+  const selectedIndex = state.snippets.findIndex(
+    (snippet) => snippet.id === state.selectedSnippetId
+  );
+  if (selectedIndex === -1) {
+    throw new Error("No prompt snippet is selected");
+  }
+
+  const remaining = state.snippets.filter((snippet) => snippet.id !== state.selectedSnippetId);
+  state.snippets = remaining;
+  state.selectedSnippetId =
+    state.snippets[Math.min(selectedIndex, state.snippets.length - 1)]?.id ?? "";
+
+  await savePromptSnippets(state.snippets);
+  renderPromptLibrary();
+  setStatus("Deleted prompt snippet");
+}
+
+function updateSelectedPromptSnippet(fields: Partial<Pick<PromptSnippet, "title" | "body">>): void {
+  state.snippets = state.snippets.map((snippet) =>
+    snippet.id === state.selectedSnippetId ? { ...snippet, ...fields } : snippet
+  );
 }
 
 function selectedPromptBody(options: { allowEmpty?: boolean } = {}): string {
-  const snippet = state.snippets.find((item) => item.id === state.selectedSnippetId);
+  const snippet = selectedPromptSnippet();
   if (!snippet) {
     if (options.allowEmpty) {
       return "";
@@ -744,7 +857,44 @@ function selectedPromptBody(options: { allowEmpty?: boolean } = {}): string {
     throw new Error("No prompt snippet is selected");
   }
 
+  if (!options.allowEmpty && snippet.body.trim().length === 0) {
+    throw new Error("Prompt body is empty");
+  }
+
   return snippet.body;
+}
+
+function selectedPromptSnippet(): PromptSnippet | undefined {
+  return state.snippets.find((item) => item.id === state.selectedSnippetId);
+}
+
+function normalizedPromptTitle(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
+
+function nextPromptSnippetTitle(): string {
+  const existingTitles = new Set(state.snippets.map((snippet) => snippet.title));
+  let index = 1;
+  let title = "/new-prompt";
+  while (existingTitles.has(title)) {
+    index += 1;
+    title = `/new-prompt-${index}`;
+  }
+  return title;
+}
+
+function uniquePromptSnippetId(): string {
+  const existingIds = new Set(state.snippets.map((snippet) => snippet.id));
+  let id = "";
+  do {
+    id = `snippet-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  } while (existingIds.has(id));
+  return id;
 }
 
 function preview(): HTMLTextAreaElement {
@@ -763,10 +913,18 @@ function promptSelect(): HTMLSelectElement {
   return select;
 }
 
-function promptPreview(): HTMLTextAreaElement {
-  const textarea = document.querySelector<HTMLTextAreaElement>("textarea[data-acv-prompt-preview]");
+function promptTitleInput(): HTMLInputElement {
+  const input = document.querySelector<HTMLInputElement>("input[data-acv-prompt-title]");
+  if (!input) {
+    throw new Error("Prompt title input is unavailable");
+  }
+  return input;
+}
+
+function promptBodyInput(): HTMLTextAreaElement {
+  const textarea = document.querySelector<HTMLTextAreaElement>("textarea[data-acv-prompt-body]");
   if (!textarea) {
-    throw new Error("Prompt preview is unavailable");
+    throw new Error("Prompt body input is unavailable");
   }
   return textarea;
 }

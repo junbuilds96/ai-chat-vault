@@ -65,6 +65,13 @@ describe("prompt snippets storage", () => {
     );
   });
 
+  it("preserves an explicitly empty local prompt library", async () => {
+    const storage = installStorageMock([]);
+
+    await expect(loadPromptSnippets()).resolves.toEqual([]);
+    expect(storage.set).not.toHaveBeenCalled();
+  });
+
   it("saves normalized prompt snippets", async () => {
     const storage = installStorageMock();
 
@@ -76,5 +83,13 @@ describe("prompt snippets storage", () => {
     expect(storage.store[PROMPT_SNIPPETS_STORAGE_KEY]).toEqual([
       { id: "debug", title: "/debug", body: "Debug this." }
     ]);
+  });
+
+  it("saves an empty prompt snippet list without restoring defaults", async () => {
+    const storage = installStorageMock();
+
+    await savePromptSnippets([]);
+
+    expect(storage.store[PROMPT_SNIPPETS_STORAGE_KEY]).toEqual([]);
   });
 });

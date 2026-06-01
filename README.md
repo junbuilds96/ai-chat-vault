@@ -13,7 +13,7 @@ AI Chat Vault is a compact Chrome Manifest V3 toolkit for local-first ChatGPT wo
 - Previews Markdown before export.
 - Copies Markdown to the clipboard.
 - Downloads a `.md` file locally with a safe, readable filename.
-- Provides a small Prompt Library for local slash-style snippets.
+- Provides an editable Prompt Library for local slash-style snippets.
 - Copies a selected prompt or inserts it into the ChatGPT composer.
 - Uses no backend services, cloud sync, analytics, or remote storage.
 
@@ -31,7 +31,7 @@ After capture, **Conversation Notes** appears in the popup for the current ChatG
 
 ## Prompt Library
 
-The popup includes a compact **Prompt Library** with default snippets such as `/summarize`, `/improve`, and `/debug`. Pick a snippet to preview it, then use **Copy prompt** or **Insert into ChatGPT**. Snippets are stored only in `chrome.storage.local`; the storage permission is used for these local snippets and not for conversation export, sync, analytics, or network transfer.
+The popup includes a compact **Prompt Library** with default snippets such as `/summarize`, `/improve`, and `/debug`. Pick a snippet, edit its slash command or body, then use **Save** to keep it locally. Use **New** to add a snippet and **Delete** to remove one. **Copy prompt** and **Insert into ChatGPT** continue to use the selected snippet body. Snippets are stored only in `chrome.storage.local`; the storage permission is used for these local snippets and not for conversation export, sync, analytics, or network transfer.
 
 ## Development
 

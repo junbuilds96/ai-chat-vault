@@ -72,6 +72,7 @@ body {
 }
 
 input[type="search"],
+input[type="text"],
 select {
   width: 100%;
   min-height: 32px;
@@ -104,6 +105,21 @@ select:focus-visible,
 textarea:focus-visible {
   outline: 2px solid #f97316;
   outline-offset: 2px;
+}
+
+.acv-prompt-edit-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.acv-prompt-edit-actions button {
+  color: #1f2937;
+  background: #e5e7eb;
+}
+
+.acv-prompt-edit-actions button:hover {
+  background: #d1d5db;
 }
 
 .acv-prompt-actions {
