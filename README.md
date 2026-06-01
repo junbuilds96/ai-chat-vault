@@ -11,6 +11,7 @@ AI Chat Vault is a compact Chrome Manifest V3 toolkit for turning ChatGPT conver
 - Adds a Message Navigator after capture for local role/text filtering, turn counts, and quick focus in the captured list.
 - Adds Conversation Notes after capture for private per-conversation notes stored locally by conversation identity.
 - Adds Conversation Bookmarks after capture for local saved conversation links with copy/delete controls.
+- Includes Work Capsule schema, Markdown rendering, and local storage groundwork for reusable chat context.
 - Previews Markdown before export.
 - Copies Markdown to the clipboard.
 - Downloads a `.md` file locally with a safe, readable filename.
@@ -41,6 +42,10 @@ After capture, **Conversation Bookmarks** appears under notes. Use **Save bookma
 ## Prompt Library
 
 The popup includes a compact **Prompt Library** with default snippets such as `/summarize`, `/improve`, and `/debug`. Pick a snippet, edit its slash command or body, then use **Save** to keep it locally. Use **New** to add a snippet and **Delete** to remove one. **Copy prompt** and **Insert into ChatGPT** continue to use the selected snippet body. Snippets are stored only in `chrome.storage.local`; the storage permission is used for these local snippets and not for conversation export, sync, analytics, or network transfer.
+
+## Work Capsules
+
+The Work Capsule foundation exists as local schema, validation, Markdown rendering, and `chrome.storage.local` storage groundwork for reusable chat context. It is not wired into the popup UI loop yet.
 
 ## Development
 
