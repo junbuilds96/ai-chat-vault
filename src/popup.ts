@@ -1,4 +1,10 @@
 import "./popup.css";
+import {
+  deleteConversationBookmark,
+  loadConversationBookmarks,
+  upsertConversationBookmark,
+  type ConversationBookmark
+} from "./bookmarks";
 import type { ConversationExport, Speaker } from "./extractor";
 import { conversationToMarkdown, markdownFilename } from "./markdown";
 import {
@@ -37,6 +43,7 @@ interface PopupState {
   focusedMessageIndex: number | null;
   conversationNote: string;
   conversationNoteIdentity: string;
+  bookmarks: ConversationBookmark[];
 }
 
 const state: PopupState = {
@@ -50,7 +57,8 @@ const state: PopupState = {
   navigatorRole: "all",
   focusedMessageIndex: null,
   conversationNote: "",
-  conversationNoteIdentity: ""
+  conversationNoteIdentity: "",
+  bookmarks: []
 };
 
 const NAVIGATOR_ROLES: MessageNavigatorRole[] = ["all", "user", "assistant", "system"];
@@ -106,6 +114,14 @@ function initPopup(): void {
           <span data-acv-notes-context>Private local note</span>
         </div>
         <textarea aria-label="Conversation note" data-acv-conversation-note placeholder="Private notes for this conversation"></textarea>
+      </section>
+      <section class="acv-conversation-bookmarks" aria-label="Conversation Bookmarks" hidden>
+        <div class="acv-section-heading">
+          <strong>Conversation Bookmarks</strong>
+          <span data-acv-bookmarks-context>Local saved links</span>
+        </div>
+        <button type="button" data-acv-action="save-bookmark">Save bookmark</button>
+        <div class="acv-bookmark-list" aria-label="Saved conversation bookmarks"></div>
       </section>
       <section class="acv-message-panel" hidden>
         <section class="acv-message-navigator" aria-label="Message Navigator">
@@ -171,6 +187,21 @@ async function handlePopupClick(event: MouseEvent): Promise<void> {
 
     if (action === "delete-prompt") {
       await deleteCurrentPromptSnippet();
+      return;
+    }
+
+    if (action === "save-bookmark") {
+      await saveCurrentConversationBookmark();
+      return;
+    }
+
+    if (action === "copy-bookmark") {
+      await copyConversationBookmark(button.dataset.acvBookmarkId ?? "");
+      return;
+    }
+
+    if (action === "delete-bookmark") {
+      await deleteCurrentConversationBookmark(button.dataset.acvBookmarkId ?? "");
       return;
     }
 
@@ -410,9 +441,15 @@ async function updateCapturedConversation(conversation: ConversationExport): Pro
   state.navigatorRole = "all";
   state.focusedMessageIndex = null;
   state.conversationNoteIdentity = conversationNoteIdentity(conversation);
-  state.conversationNote = await loadConversationNote(conversation);
+  const [conversationNote, bookmarks] = await Promise.all([
+    loadConversationNote(conversation),
+    loadConversationBookmarks()
+  ]);
+  state.conversationNote = conversationNote;
+  state.bookmarks = bookmarks;
   preview().value = state.markdown;
   renderConversationNotes();
+  renderConversationBookmarks();
   renderMessageList(conversation.messages);
   renderMessageNavigator();
   setStatus(`Captured ${conversation.messages.length} message${conversation.messages.length === 1 ? "" : "s"}`);
@@ -720,6 +757,103 @@ async function saveCurrentConversationNote(): Promise<void> {
   }
 }
 
+async function saveCurrentConversationBookmark(): Promise<void> {
+  const conversation = state.conversation;
+  if (!conversation) {
+    throw new Error("Capture a conversation before saving a bookmark");
+  }
+
+  state.bookmarks = await upsertConversationBookmark({
+    id: state.conversationNoteIdentity,
+    title: conversation.title || "ChatGPT Conversation",
+    url: conversation.url,
+    savedAt: new Date().toISOString()
+  });
+  renderConversationBookmarks();
+  setStatus("Saved conversation bookmark locally");
+}
+
+async function copyConversationBookmark(id: string): Promise<void> {
+  const bookmark = state.bookmarks.find((item) => item.id === id);
+  if (!bookmark) {
+    throw new Error("Conversation bookmark was not found");
+  }
+
+  await navigator.clipboard.writeText(bookmark.url);
+  setStatus("Copied bookmark link to clipboard");
+}
+
+async function deleteCurrentConversationBookmark(id: string): Promise<void> {
+  const bookmark = state.bookmarks.find((item) => item.id === id);
+  if (!bookmark) {
+    throw new Error("Conversation bookmark was not found");
+  }
+
+  state.bookmarks = await deleteConversationBookmark(bookmark.id);
+  renderConversationBookmarks();
+  setStatus("Deleted conversation bookmark");
+}
+
+function renderConversationBookmarks(): void {
+  const section = conversationBookmarksSection();
+  const context = conversationBookmarksContext();
+  const list = conversationBookmarkList();
+
+  section.hidden = !state.conversation;
+  context.textContent =
+    state.bookmarks.length === 1
+      ? "1 saved link"
+      : `${state.bookmarks.length} saved links`;
+  list.textContent = "";
+
+  if (!state.conversation) {
+    return;
+  }
+
+  if (state.bookmarks.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "acv-bookmark-empty";
+    empty.textContent = "No saved bookmarks";
+    list.append(empty);
+    return;
+  }
+
+  state.bookmarks.forEach((bookmark) => {
+    const row = document.createElement("div");
+    row.className = "acv-bookmark-row";
+    row.dataset.acvBookmarkId = bookmark.id;
+
+    const details = document.createElement("div");
+    details.className = "acv-bookmark-details";
+
+    const title = document.createElement("strong");
+    title.textContent = bookmark.title;
+
+    const url = document.createElement("span");
+    url.textContent = bookmark.url;
+
+    const actions = document.createElement("div");
+    actions.className = "acv-bookmark-actions";
+
+    const copyButton = document.createElement("button");
+    copyButton.type = "button";
+    copyButton.dataset.acvAction = "copy-bookmark";
+    copyButton.dataset.acvBookmarkId = bookmark.id;
+    copyButton.textContent = "Copy link";
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.dataset.acvAction = "delete-bookmark";
+    deleteButton.dataset.acvBookmarkId = bookmark.id;
+    deleteButton.textContent = "Delete";
+
+    details.append(title, url);
+    actions.append(copyButton, deleteButton);
+    row.append(details, actions);
+    list.append(row);
+  });
+}
+
 function shortConversationContext(conversation: ConversationExport): string {
   const label = conversation.title.trim() || conversation.url.trim() || "Current conversation";
   return label.length > 38 ? `${label.slice(0, 35)}...` : label;
@@ -953,6 +1087,30 @@ function conversationNoteContext(): HTMLSpanElement {
     throw new Error("Conversation notes context is unavailable");
   }
   return context;
+}
+
+function conversationBookmarksSection(): HTMLElement {
+  const section = document.querySelector<HTMLElement>(".acv-conversation-bookmarks");
+  if (!section) {
+    throw new Error("Conversation bookmarks section is unavailable");
+  }
+  return section;
+}
+
+function conversationBookmarksContext(): HTMLSpanElement {
+  const context = document.querySelector<HTMLSpanElement>("[data-acv-bookmarks-context]");
+  if (!context) {
+    throw new Error("Conversation bookmarks context is unavailable");
+  }
+  return context;
+}
+
+function conversationBookmarkList(): HTMLDivElement {
+  const list = document.querySelector<HTMLDivElement>(".acv-bookmark-list");
+  if (!list) {
+    throw new Error("Conversation bookmark list is unavailable");
+  }
+  return list;
 }
 
 function messagePanel(): HTMLDivElement {

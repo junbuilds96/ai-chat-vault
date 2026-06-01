@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CONVERSATION_BOOKMARKS_STORAGE_KEY } from "../src/bookmarks";
 import {
   CAPTURE_REQUEST_TYPE,
   CAPTURE_RESPONSE_TYPE,
@@ -199,6 +200,28 @@ function conversationNotesContext(): string {
   return document.querySelector("[data-acv-notes-context]")?.textContent ?? "";
 }
 
+function conversationBookmarksSection(): HTMLElement {
+  const section = document.querySelector<HTMLElement>(".acv-conversation-bookmarks");
+  if (!section) {
+    throw new Error("Missing conversation bookmarks section");
+  }
+  return section;
+}
+
+function conversationBookmarksContext(): string {
+  return document.querySelector("[data-acv-bookmarks-context]")?.textContent ?? "";
+}
+
+function bookmarkRows(): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>(".acv-bookmark-row"));
+}
+
+function bookmarkButtons(action: string): HTMLButtonElement[] {
+  return Array.from(
+    document.querySelectorAll<HTMLButtonElement>(`button[data-acv-action="${action}"]`)
+  );
+}
+
 function status(): string {
   return document.querySelector(".acv-status")?.textContent ?? "";
 }
@@ -291,6 +314,84 @@ describe("toolbar popup", () => {
 
     expect(conversationNoteInput().value).toBe("Follow up on the benchmark table.");
     expect(status()).toBe("Captured 3 messages");
+  });
+
+  it("saves, copies, and deletes local conversation bookmarks", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+    const chromeMock = installChromeMock("https://chatgpt.com/c/test", {
+      [CONVERSATION_BOOKMARKS_STORAGE_KEY]: [
+        {
+          id: "existing",
+          title: "Existing plan",
+          url: "https://chatgpt.com/c/existing",
+          savedAt: "2026-06-01T00:00:00.000Z"
+        }
+      ]
+    });
+    const identity = conversationNoteIdentity(conversation);
+
+    await loadPopup();
+    await flushPromptLoad();
+
+    expect(conversationBookmarksSection().hidden).toBe(true);
+
+    button("capture").click();
+    await flushAsyncClick();
+
+    expect(conversationBookmarksSection().hidden).toBe(false);
+    expect(conversationBookmarksContext()).toBe("1 saved link");
+    expect(bookmarkRows().map((row) => row.textContent)).toEqual([
+      "Existing planhttps://chatgpt.com/c/existingCopy linkDelete"
+    ]);
+
+    button("save-bookmark").click();
+    await flushAsyncClick();
+
+    expect(chromeMock.store[CONVERSATION_BOOKMARKS_STORAGE_KEY]).toEqual([
+      expect.objectContaining({
+        id: identity,
+        title: "Popup Test - ChatGPT",
+        url: "https://chatgpt.com/c/test"
+      }),
+      {
+        id: "existing",
+        title: "Existing plan",
+        url: "https://chatgpt.com/c/existing",
+        savedAt: "2026-06-01T00:00:00.000Z"
+      }
+    ]);
+    expect(conversationBookmarksContext()).toBe("2 saved links");
+    expect(bookmarkRows()[0].textContent).toBe(
+      "Popup Test - ChatGPThttps://chatgpt.com/c/testCopy linkDelete"
+    );
+    expect(status()).toBe("Saved conversation bookmark locally");
+
+    bookmarkButtons("copy-bookmark")[0].click();
+    await flushAsyncClick();
+
+    expect(writeText).toHaveBeenCalledWith("https://chatgpt.com/c/test");
+    expect(status()).toBe("Copied bookmark link to clipboard");
+
+    bookmarkButtons("delete-bookmark")[0].click();
+    await flushAsyncClick();
+
+    expect(chromeMock.store[CONVERSATION_BOOKMARKS_STORAGE_KEY]).toEqual([
+      {
+        id: "existing",
+        title: "Existing plan",
+        url: "https://chatgpt.com/c/existing",
+        savedAt: "2026-06-01T00:00:00.000Z"
+      }
+    ]);
+    expect(conversationBookmarksContext()).toBe("1 saved link");
+    expect(bookmarkRows().map((row) => row.textContent)).toEqual([
+      "Existing planhttps://chatgpt.com/c/existingCopy linkDelete"
+    ]);
+    expect(status()).toBe("Deleted conversation bookmark");
   });
 
   it("filters captured turns by role and text in the Message Navigator", async () => {

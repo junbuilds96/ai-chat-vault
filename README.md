@@ -10,6 +10,7 @@ AI Chat Vault is a compact Chrome Manifest V3 toolkit for local-first ChatGPT wo
 - Shows detected turns with role, preview, checkbox, and Select all/Select none controls after capture.
 - Adds a Message Navigator after capture for local role/text filtering, turn counts, and quick focus in the captured list.
 - Adds Conversation Notes after capture for private per-conversation notes stored locally by conversation identity.
+- Adds Conversation Bookmarks after capture for local saved conversation links with copy/delete controls.
 - Previews Markdown before export.
 - Copies Markdown to the clipboard.
 - Downloads a `.md` file locally with a safe, readable filename.
@@ -28,6 +29,10 @@ After capture, use **Message Navigator** to search captured turns by role or tex
 ## Conversation Notes
 
 After capture, **Conversation Notes** appears in the popup for the current ChatGPT conversation. Notes auto-save to `chrome.storage.local` under a sanitized conversation identity based on the conversation URL, with the title used as a fallback. They reload when you capture the same conversation later and are never sent to a backend.
+
+## Conversation Bookmarks
+
+After capture, **Conversation Bookmarks** appears under notes. Use **Save bookmark** to store the current conversation title and URL locally by the same conversation identity used for notes. Saved links can be copied or deleted from the popup, and bookmarks stay in `chrome.storage.local` only.
 
 ## Prompt Library
 
