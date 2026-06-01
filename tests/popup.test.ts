@@ -5,6 +5,7 @@ import {
   INSERT_PROMPT_REQUEST_TYPE,
   INSERT_PROMPT_RESPONSE_TYPE
 } from "../src/messages";
+import { CONVERSATION_NOTES_STORAGE_KEY, conversationNoteIdentity } from "../src/notes";
 import { PROMPT_SNIPPETS_STORAGE_KEY } from "../src/prompts";
 
 const conversation = {
@@ -18,12 +19,19 @@ const conversation = {
   ]
 };
 
-function installChromeMock(tabUrl = "https://chatgpt.com/c/test") {
+function installChromeMock(
+  tabUrl = "https://chatgpt.com/c/test",
+  initialStorage: Record<string, unknown> = {}
+) {
   const runtime: { lastError?: { message?: string } } = {};
   const promptSnippets = [
     { id: "summarize", title: "/summarize", body: "Summarize this local chat." },
     { id: "debug", title: "/debug", body: "Debug this issue." }
   ];
+  const store: Record<string, unknown> = {
+    [PROMPT_SNIPPETS_STORAGE_KEY]: promptSnippets,
+    ...initialStorage
+  };
   const query = vi.fn((queryInfo, callback) => {
     expect(queryInfo).toEqual({ active: true, currentWindow: true });
     callback([{ id: 7, url: tabUrl }]);
@@ -43,9 +51,12 @@ function installChromeMock(tabUrl = "https://chatgpt.com/c/test") {
     callback(undefined);
   });
   const get = vi.fn((key, callback) => {
-    callback({ [key]: promptSnippets });
+    callback({ [key]: store[key] });
   });
-  const set = vi.fn((_items, callback) => callback());
+  const set = vi.fn((items, callback) => {
+    Object.assign(store, items);
+    callback();
+  });
 
   vi.stubGlobal("chrome", {
     runtime,
@@ -55,7 +66,7 @@ function installChromeMock(tabUrl = "https://chatgpt.com/c/test") {
     tabs: { query, sendMessage }
   });
 
-  return { get, promptSnippets, query, runtime, sendMessage, set };
+  return { get, promptSnippets, query, runtime, sendMessage, set, store };
 }
 
 function installChromeMockWithSendMessageError(message: string) {
@@ -150,11 +161,35 @@ function promptSelect(): HTMLSelectElement {
   return select;
 }
 
+function conversationNotesSection(): HTMLElement {
+  const section = document.querySelector<HTMLElement>(".acv-conversation-notes");
+  if (!section) {
+    throw new Error("Missing conversation notes section");
+  }
+  return section;
+}
+
+function conversationNoteInput(): HTMLTextAreaElement {
+  const textarea = document.querySelector<HTMLTextAreaElement>(
+    "textarea[data-acv-conversation-note]"
+  );
+  if (!textarea) {
+    throw new Error("Missing conversation note input");
+  }
+  return textarea;
+}
+
+function conversationNotesContext(): string {
+  return document.querySelector("[data-acv-notes-context]")?.textContent ?? "";
+}
+
 function status(): string {
   return document.querySelector(".acv-status")?.textContent ?? "";
 }
 
 async function flushAsyncClick(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
@@ -188,6 +223,58 @@ describe("toolbar popup", () => {
     expect(preview()).toContain("# Popup Test - ChatGPT");
     expect(preview()).toContain("## User\n\nQuestion one");
     expect(preview()).toContain("## Assistant\n\nAnswer two");
+  });
+
+  it("loads local conversation notes after capture", async () => {
+    const identity = conversationNoteIdentity(conversation);
+    installChromeMock("https://chatgpt.com/c/test", {
+      [CONVERSATION_NOTES_STORAGE_KEY]: {
+        [identity]: "Remember to export this for the incident review."
+      }
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+
+    expect(conversationNotesSection().hidden).toBe(true);
+
+    button("capture").click();
+    await flushAsyncClick();
+
+    expect(conversationNotesSection().hidden).toBe(false);
+    expect(conversationNotesSection().dataset.acvNotesIdentity).toBe(identity);
+    expect(conversationNotesContext()).toBe("Popup Test - ChatGPT");
+    expect(conversationNoteInput().value).toBe(
+      "Remember to export this for the incident review."
+    );
+  });
+
+  it("saves local conversation notes and reloads them on later captures", async () => {
+    const chromeMock = installChromeMock();
+    const identity = conversationNoteIdentity(conversation);
+
+    await loadPopup();
+    await flushPromptLoad();
+
+    button("capture").click();
+    await flushAsyncClick();
+
+    const note = conversationNoteInput();
+    note.value = "Follow up on the benchmark table.";
+    note.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushAsyncClick();
+
+    expect(chromeMock.store[CONVERSATION_NOTES_STORAGE_KEY]).toEqual({
+      [identity]: "Follow up on the benchmark table."
+    });
+    expect(status()).toBe("Saved conversation note locally");
+
+    note.value = "";
+    button("capture").click();
+    await flushAsyncClick();
+
+    expect(conversationNoteInput().value).toBe("Follow up on the benchmark table.");
+    expect(status()).toBe("Captured 3 messages");
   });
 
   it("filters captured turns by role and text in the Message Navigator", async () => {

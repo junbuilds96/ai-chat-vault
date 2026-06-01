@@ -16,6 +16,7 @@ import {
   type InsertPromptResponse,
   isSupportedChatGptHost
 } from "./messages";
+import { conversationNoteIdentity, loadConversationNote, saveConversationNote } from "./notes";
 import { loadPromptSnippets, type PromptSnippet } from "./prompts";
 
 type MessageNavigatorRole = "all" | Speaker;
@@ -30,6 +31,8 @@ interface PopupState {
   navigatorQuery: string;
   navigatorRole: MessageNavigatorRole;
   focusedMessageIndex: number | null;
+  conversationNote: string;
+  conversationNoteIdentity: string;
 }
 
 const state: PopupState = {
@@ -41,7 +44,9 @@ const state: PopupState = {
   selectedSnippetId: "",
   navigatorQuery: "",
   navigatorRole: "all",
-  focusedMessageIndex: null
+  focusedMessageIndex: null,
+  conversationNote: "",
+  conversationNoteIdentity: ""
 };
 
 const NAVIGATOR_ROLES: MessageNavigatorRole[] = ["all", "user", "assistant", "system"];
@@ -84,6 +89,13 @@ function initPopup(): void {
           <button type="button" data-acv-action="copy-prompt">Copy prompt</button>
           <button type="button" data-acv-action="insert-prompt">Insert into ChatGPT</button>
         </div>
+      </section>
+      <section class="acv-conversation-notes" aria-label="Conversation Notes" hidden>
+        <div class="acv-section-heading">
+          <strong>Conversation Notes</strong>
+          <span data-acv-notes-context>Private local note</span>
+        </div>
+        <textarea aria-label="Conversation note" data-acv-conversation-note placeholder="Private notes for this conversation"></textarea>
       </section>
       <section class="acv-message-panel" hidden>
         <section class="acv-message-navigator" aria-label="Message Navigator">
@@ -171,12 +183,21 @@ function handlePopupInput(event: Event): void {
   const input = (event.target as HTMLElement).closest<HTMLInputElement>(
     "input[data-acv-message-search]"
   );
-  if (!input) {
+  if (input) {
+    state.navigatorQuery = input.value;
+    renderMessageNavigator();
     return;
   }
 
-  state.navigatorQuery = input.value;
-  renderMessageNavigator();
+  const note = (event.target as HTMLElement).closest<HTMLTextAreaElement>(
+    "textarea[data-acv-conversation-note]"
+  );
+  if (!note) {
+    return;
+  }
+
+  state.conversationNote = note.value;
+  void saveCurrentConversationNote();
 }
 
 function handlePopupChange(event: Event): void {
@@ -246,7 +267,7 @@ async function captureFromActiveTab(): Promise<void> {
     throw new Error(response.error);
   }
 
-  updateCapturedConversation(response.conversation);
+  await updateCapturedConversation(response.conversation);
 }
 
 function activeTab(): Promise<chrome.tabs.Tab> {
@@ -337,7 +358,7 @@ function reloadChatGptTabMessage(retryAction = "Capture"): string {
   return `Reload the ChatGPT tab after installing or updating AI Chat Vault, then try ${retryAction} again.`;
 }
 
-function updateCapturedConversation(conversation: ConversationExport): void {
+async function updateCapturedConversation(conversation: ConversationExport): Promise<void> {
   state.conversation = conversation;
   state.selectedMessageIndexes = allMessageIndexes(conversation.messages.length);
   state.title = conversation.title;
@@ -345,7 +366,10 @@ function updateCapturedConversation(conversation: ConversationExport): void {
   state.navigatorQuery = "";
   state.navigatorRole = "all";
   state.focusedMessageIndex = null;
+  state.conversationNoteIdentity = conversationNoteIdentity(conversation);
+  state.conversationNote = await loadConversationNote(conversation);
   preview().value = state.markdown;
+  renderConversationNotes();
   renderMessageList(conversation.messages);
   renderMessageNavigator();
   setStatus(`Captured ${conversation.messages.length} message${conversation.messages.length === 1 ? "" : "s"}`);
@@ -618,6 +642,46 @@ function focusMessage(messageIndex: number): void {
   setStatus(`Focused message ${messageIndex + 1} of ${state.conversation.messages.length}`);
 }
 
+function renderConversationNotes(): void {
+  const section = conversationNotesSection();
+  const note = conversationNoteInput();
+  const context = conversationNoteContext();
+
+  section.hidden = !state.conversation;
+  note.value = state.conversationNote;
+  context.textContent = state.conversation
+    ? shortConversationContext(state.conversation)
+    : "Private local note";
+
+  if (state.conversation) {
+    section.dataset.acvNotesIdentity = state.conversationNoteIdentity;
+    note.title = state.conversation.url || state.conversation.title;
+  } else {
+    delete section.dataset.acvNotesIdentity;
+    note.removeAttribute("title");
+  }
+}
+
+async function saveCurrentConversationNote(): Promise<void> {
+  const conversation = state.conversation;
+  const note = state.conversationNote;
+  if (!conversation) {
+    return;
+  }
+
+  try {
+    await saveConversationNote(conversation, note);
+    setStatus("Saved conversation note locally");
+  } catch {
+    setStatus("Could not save conversation note");
+  }
+}
+
+function shortConversationContext(conversation: ConversationExport): string {
+  const label = conversation.title.trim() || conversation.url.trim() || "Current conversation";
+  return label.length > 38 ? `${label.slice(0, 35)}...` : label;
+}
+
 function syncFocusedMessage(): void {
   document
     .querySelectorAll<HTMLElement>("[data-acv-message-row-index]")
@@ -705,6 +769,32 @@ function promptPreview(): HTMLTextAreaElement {
     throw new Error("Prompt preview is unavailable");
   }
   return textarea;
+}
+
+function conversationNotesSection(): HTMLElement {
+  const section = document.querySelector<HTMLElement>(".acv-conversation-notes");
+  if (!section) {
+    throw new Error("Conversation notes section is unavailable");
+  }
+  return section;
+}
+
+function conversationNoteInput(): HTMLTextAreaElement {
+  const textarea = document.querySelector<HTMLTextAreaElement>(
+    "textarea[data-acv-conversation-note]"
+  );
+  if (!textarea) {
+    throw new Error("Conversation note input is unavailable");
+  }
+  return textarea;
+}
+
+function conversationNoteContext(): HTMLSpanElement {
+  const context = document.querySelector<HTMLSpanElement>("[data-acv-notes-context]");
+  if (!context) {
+    throw new Error("Conversation notes context is unavailable");
+  }
+  return context;
 }
 
 function messagePanel(): HTMLDivElement {

@@ -44,6 +44,16 @@ body {
   padding: 0 12px 10px;
 }
 
+.acv-conversation-notes {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px 10px;
+}
+
+.acv-conversation-notes[hidden] {
+  display: none;
+}
+
 .acv-section-heading {
   display: flex;
   align-items: baseline;
@@ -267,6 +277,14 @@ textarea {
   min-height: 72px;
   max-height: 120px;
   margin: 0;
+}
+
+.acv-conversation-notes textarea {
+  width: 100%;
+  min-height: 72px;
+  max-height: 140px;
+  margin: 0;
+  font: inherit;
 }
 
 .acv-markdown-preview {
