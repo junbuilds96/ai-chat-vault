@@ -313,6 +313,11 @@ async function handlePopupClick(event: MouseEvent): Promise<void> {
       return;
     }
 
+    if (action === "remove-library-capsule") {
+      await removeWorkCapsuleFromLibraryById(button.dataset.acvCapsuleId ?? "");
+      return;
+    }
+
     if (action === "delete-capsule") {
       await deleteCurrentWorkCapsule();
       return;
@@ -1089,14 +1094,18 @@ function createCapsuleDraftFromSelection(): void {
 async function saveCurrentWorkCapsule(): Promise<void> {
   const capsule = currentWorkCapsuleDraft();
   await createWorkCapsule(capsule);
+  await refreshSavedWorkCapsules();
+  renderWorkCapsuleSection();
+  setStatus("Saved capsule locally");
+}
+
+async function refreshSavedWorkCapsules(): Promise<void> {
   const [recentWorkCapsule, workCapsuleLibrary] = await Promise.all([
     state.conversation ? findMostRecentWorkCapsuleBySourceUrl(state.conversation.url) : null,
     listWorkCapsules()
   ]);
   state.recentWorkCapsule = recentWorkCapsule;
   state.workCapsuleLibrary = workCapsuleLibrary;
-  renderWorkCapsuleSection();
-  setStatus("Saved capsule locally");
 }
 
 async function reopenRecentWorkCapsule(): Promise<void> {
@@ -1138,14 +1147,52 @@ async function deleteCurrentWorkCapsule(): Promise<void> {
   }
 
   await deleteWorkCapsule(savedCapsule.id);
-  state.recentWorkCapsule = null;
-  state.workCapsuleLibrary = state.workCapsuleLibrary.filter((item) => item.id !== savedCapsule.id);
   if (state.workCapsuleDraft?.id === savedCapsule.id) {
     state.workCapsuleDraft = null;
+    state.workCapsuleContextPromptEdited = false;
   }
+  await refreshSavedWorkCapsules();
 
   renderWorkCapsuleSection();
   setStatus("Deleted saved capsule locally");
+}
+
+async function removeWorkCapsuleFromLibraryById(id: string): Promise<void> {
+  const capsuleId = id.trim();
+  if (!capsuleId) {
+    throw new Error("Saved capsule id is missing");
+  }
+
+  const libraryItem = state.workCapsuleLibrary.find((item) => item.id === capsuleId);
+  if (!libraryItem) {
+    await refreshSavedWorkCapsules();
+    renderWorkCapsuleSection();
+    setStatus("Saved capsule is no longer in the library");
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Remove saved Work Capsule "${libraryItem.title}" from this browser?`
+  );
+  if (!confirmed) {
+    setStatus("Capsule remove canceled");
+    return;
+  }
+
+  const savedCapsule = await getWorkCapsule(capsuleId);
+  await deleteWorkCapsule(capsuleId);
+  if (state.workCapsuleDraft?.id === capsuleId) {
+    state.workCapsuleDraft = null;
+    state.workCapsuleContextPromptEdited = false;
+  }
+  await refreshSavedWorkCapsules();
+
+  renderWorkCapsuleSection();
+  setStatus(
+    savedCapsule
+      ? "Removed saved capsule locally"
+      : "Removed missing or invalid saved capsule from library"
+  );
 }
 
 async function copyCurrentWorkCapsuleContext(): Promise<void> {
@@ -1401,9 +1448,15 @@ function renderWorkCapsuleLibraryRow(capsule: WorkCapsuleIndexItem): HTMLDivElem
   copyButton.dataset.acvCapsuleId = capsule.id;
   copyButton.textContent = "Copy context";
 
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.dataset.acvAction = "remove-library-capsule";
+  removeButton.dataset.acvCapsuleId = capsule.id;
+  removeButton.textContent = "Remove";
+
   const actions = document.createElement("div");
   actions.className = "acv-work-capsule-library-actions";
-  actions.append(reopenButton, copyButton);
+  actions.append(reopenButton, copyButton, removeButton);
 
   row.append(details, actions);
   return row;

@@ -914,11 +914,19 @@ describe("toolbar popup", () => {
     expect(libraryRows()).toHaveLength(2);
     expect(libraryRows()[0].dataset.acvCapsuleId).toBe("capsule-other");
     expect(libraryRows()[0].textContent).toBe(
-      "Other Project CapsuleReuse a capsule from a different saved conversation.Client LaunchUpdated 2026-06-01T03:30:00.000ZReopenCopy context"
+      "Other Project CapsuleReuse a capsule from a different saved conversation.Client LaunchUpdated 2026-06-01T03:30:00.000ZReopenCopy contextRemove"
     );
     expect(libraryRows()[1].textContent).toBe(
-      "Saved Retrieval CapsuleResume the saved work capsule from this conversation.Popup Test - ChatGPTUpdated 2026-06-01T02:00:00.000ZReopenCopy context"
+      "Saved Retrieval CapsuleResume the saved work capsule from this conversation.Popup Test - ChatGPTUpdated 2026-06-01T02:00:00.000ZReopenCopy contextRemove"
     );
+    expect(
+      libraryRows()[0].querySelectorAll<HTMLButtonElement>("button").length
+    ).toBe(3);
+    expect(
+      Array.from(libraryRows()[0].querySelectorAll<HTMLButtonElement>("button")).map(
+        (rowButton) => rowButton.textContent
+      )
+    ).toEqual(["Reopen", "Copy context", "Remove"]);
     expect(workCapsuleRecent().hidden).toBe(false);
   });
 
@@ -1098,6 +1106,240 @@ describe("toolbar popup", () => {
     await flushAsyncClick();
     expect(status()).toBe("Saved capsule could not be loaded");
     expect(workCapsuleFields().hidden).toBe(true);
+  });
+
+  it("keeps a cross-conversation Work Capsule Library row when removal is canceled", async () => {
+    const saved = workCapsule({
+      id: "capsule-cross-cancel",
+      title: "Cross Conversation Capsule",
+      goal: "Keep this capsule when removal is canceled.",
+      source: {
+        ...workCapsule().source,
+        title: "Earlier ChatGPT thread",
+        url: "https://chatgpt.com/c/earlier-thread"
+      },
+      updatedAt: "2026-06-01T04:45:00.000Z"
+    });
+    const confirm = vi.fn(() => false);
+    vi.stubGlobal("confirm", confirm);
+    const chromeMock = installChromeMock("https://chatgpt.com/c/test", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: saved.id,
+          title: saved.title,
+          goal: saved.goal,
+          sourceTitle: saved.source.title,
+          sourceUrl: saved.source.url,
+          createdAt: saved.createdAt,
+          updatedAt: saved.updatedAt
+        }
+      ],
+      [workCapsuleBodyKey(saved.id)]: saved
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+
+    libraryButtons("remove-library-capsule")[0].click();
+    await flushAsyncClick();
+
+    expect(confirm).toHaveBeenCalledWith(
+      'Remove saved Work Capsule "Cross Conversation Capsule" from this browser?'
+    );
+    expect(chromeMock.store[workCapsuleBodyKey(saved.id)]).toEqual(saved);
+    expect(chromeMock.store[WORK_CAPSULE_INDEX_KEY]).toHaveLength(1);
+    expect(chromeMock.remove).not.toHaveBeenCalled();
+    expect(workCapsuleLibrary().hidden).toBe(false);
+    expect(libraryRows()).toHaveLength(1);
+    expect(libraryRows()[0].textContent).toContain("Cross Conversation Capsule");
+    expect(status()).toBe("Capsule remove canceled");
+  });
+
+  it("removes a cross-conversation Work Capsule Library row from local storage", async () => {
+    const currentConversationCapsule = workCapsule();
+    const otherConversationCapsule = workCapsule({
+      id: "capsule-cross-remove",
+      title: "Cross Conversation Capsule",
+      goal: "Remove this capsule from another saved conversation.",
+      source: {
+        ...workCapsule().source,
+        title: "Earlier ChatGPT thread",
+        url: "https://chatgpt.com/c/earlier-thread"
+      },
+      updatedAt: "2026-06-01T04:45:00.000Z"
+    });
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirm);
+    const chromeMock = installChromeMock("https://chatgpt.com/c/test", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: otherConversationCapsule.id,
+          title: otherConversationCapsule.title,
+          goal: otherConversationCapsule.goal,
+          sourceTitle: otherConversationCapsule.source.title,
+          sourceUrl: otherConversationCapsule.source.url,
+          createdAt: otherConversationCapsule.createdAt,
+          updatedAt: otherConversationCapsule.updatedAt
+        },
+        {
+          id: currentConversationCapsule.id,
+          title: currentConversationCapsule.title,
+          goal: currentConversationCapsule.goal,
+          sourceTitle: currentConversationCapsule.source.title,
+          sourceUrl: currentConversationCapsule.source.url,
+          createdAt: currentConversationCapsule.createdAt,
+          updatedAt: currentConversationCapsule.updatedAt
+        }
+      ],
+      [workCapsuleBodyKey(currentConversationCapsule.id)]: currentConversationCapsule,
+      [workCapsuleBodyKey(otherConversationCapsule.id)]: otherConversationCapsule
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+
+    libraryButtons("remove-library-capsule")[0].click();
+    await flushAsyncClick();
+
+    expect(confirm).toHaveBeenCalledWith(
+      'Remove saved Work Capsule "Cross Conversation Capsule" from this browser?'
+    );
+    expect(chromeMock.store[workCapsuleBodyKey(otherConversationCapsule.id)]).toBeUndefined();
+    expect(chromeMock.store[workCapsuleBodyKey(currentConversationCapsule.id)]).toEqual(
+      currentConversationCapsule
+    );
+    expect(chromeMock.remove).toHaveBeenCalledWith(
+      workCapsuleBodyKey(otherConversationCapsule.id),
+      expect.any(Function)
+    );
+    expect(chromeMock.store[WORK_CAPSULE_INDEX_KEY]).toEqual([
+      expect.objectContaining({ id: currentConversationCapsule.id })
+    ]);
+    expect(workCapsuleRecent().hidden).toBe(false);
+    expect(workCapsuleRecent().textContent).toContain("Saved Retrieval Capsule");
+    expect(libraryRows()).toHaveLength(1);
+    expect(libraryRows()[0].dataset.acvCapsuleId).toBe(currentConversationCapsule.id);
+    expect(status()).toBe("Removed saved capsule locally");
+  });
+
+  it("removes missing or invalid Work Capsule Library entries by id", async () => {
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirm);
+    const chromeMock = installChromeMock("https://chatgpt.com/c/test", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: "missing-body",
+          title: "Missing Body",
+          goal: "This index entry no longer has a stored body.",
+          sourceTitle: "Older thread",
+          sourceUrl: "https://chatgpt.com/c/missing-body",
+          createdAt: "2026-06-01T00:00:00.000Z",
+          updatedAt: "2026-06-01T06:00:00.000Z"
+        },
+        {
+          id: "invalid-body",
+          title: "Invalid Body",
+          goal: "This body fails validation.",
+          sourceTitle: "Older thread",
+          sourceUrl: "https://chatgpt.com/c/invalid-body",
+          createdAt: "2026-06-01T00:00:00.000Z",
+          updatedAt: "2026-06-01T05:00:00.000Z"
+        }
+      ],
+      [workCapsuleBodyKey("invalid-body")]: workCapsule({
+        id: "invalid-body",
+        title: ""
+      })
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+
+    libraryButtons("remove-library-capsule")[0].click();
+    await flushAsyncClick();
+
+    expect(confirm).toHaveBeenCalledWith(
+      'Remove saved Work Capsule "Missing Body" from this browser?'
+    );
+    expect(chromeMock.remove).toHaveBeenCalledWith(workCapsuleBodyKey("missing-body"), expect.any(Function));
+    expect(libraryRows()).toHaveLength(1);
+    expect(libraryRows()[0].dataset.acvCapsuleId).toBe("invalid-body");
+    expect(status()).toBe("Removed missing or invalid saved capsule from library");
+
+    libraryButtons("remove-library-capsule")[0].click();
+    await flushAsyncClick();
+
+    expect(confirm).toHaveBeenCalledWith(
+      'Remove saved Work Capsule "Invalid Body" from this browser?'
+    );
+    expect(chromeMock.store[workCapsuleBodyKey("invalid-body")]).toBeUndefined();
+    expect(chromeMock.remove).toHaveBeenCalledWith(workCapsuleBodyKey("invalid-body"), expect.any(Function));
+    expect(chromeMock.store[WORK_CAPSULE_INDEX_KEY]).toEqual([]);
+    expect(workCapsuleLibrary().hidden).toBe(true);
+    expect(status()).toBe("Removed missing or invalid saved capsule from library");
+  });
+
+  it("hides an opened Work Capsule Library draft when that saved capsule is removed", async () => {
+    const saved = workCapsule({
+      id: "capsule-opened-library",
+      title: "Opened Library Capsule",
+      project: "Library Draft",
+      goal: "Open this capsule, then remove it from the library.",
+      source: {
+        ...workCapsule().source,
+        title: "Earlier ChatGPT thread",
+        url: "https://chatgpt.com/c/opened-library"
+      },
+      updatedAt: "2026-06-01T04:50:00.000Z"
+    });
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirm);
+    const chromeMock = installChromeMock("https://chatgpt.com/c/test", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: saved.id,
+          title: saved.title,
+          project: saved.project,
+          goal: saved.goal,
+          sourceTitle: saved.source.title,
+          sourceUrl: saved.source.url,
+          createdAt: saved.createdAt,
+          updatedAt: saved.updatedAt
+        }
+      ],
+      [workCapsuleBodyKey(saved.id)]: saved
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+    libraryButtons("reopen-library-capsule")[0].click();
+    await flushAsyncClick();
+
+    expect(workCapsuleFields().hidden).toBe(false);
+    expect(capsuleField("title").value).toBe("Opened Library Capsule");
+
+    libraryButtons("remove-library-capsule")[0].click();
+    await flushAsyncClick();
+
+    expect(confirm).toHaveBeenCalledWith(
+      'Remove saved Work Capsule "Opened Library Capsule" from this browser?'
+    );
+    expect(chromeMock.store[workCapsuleBodyKey(saved.id)]).toBeUndefined();
+    expect(chromeMock.store[WORK_CAPSULE_INDEX_KEY]).toEqual([]);
+    expect(workCapsuleFields().hidden).toBe(true);
+    expect(workCapsuleLibrary().hidden).toBe(true);
+    expect(document.querySelector("[data-acv-work-capsule-context]")?.textContent).toBe(
+      "3 selected turns"
+    );
+    expect(status()).toBe("Removed saved capsule locally");
   });
 
   it("shows a delete action for the recent saved Work Capsule", async () => {
