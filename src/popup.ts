@@ -162,6 +162,10 @@ function initPopup(): void {
             <input type="text" data-acv-capsule-field="title" aria-label="Work capsule title" />
           </label>
           <label>
+            <span>Project</span>
+            <input type="text" data-acv-capsule-field="project" aria-label="Work capsule project" />
+          </label>
+          <label>
             <span>Goal</span>
             <textarea data-acv-capsule-field="goal" aria-label="Work capsule goal"></textarea>
           </label>
@@ -1178,9 +1182,11 @@ function updateWorkCapsuleDraftFromFields(): void {
     return;
   }
 
+  const { project: _previousProject, ...draftWithoutProject } = draft;
   const nextDraftWithoutContextPrompt = {
-    ...draft,
+    ...draftWithoutProject,
     title: stringFieldValue("title") || "Untitled Work Capsule",
+    ...optionalCapsuleField("project"),
     goal: stringFieldValue("goal") || "Capture reusable context from selected messages.",
     reusableContext: textAreaLines("reusableContext"),
     decisions: workCapsuleItems("decisions", "decision"),
@@ -1246,6 +1252,7 @@ function renderWorkCapsuleSection(): void {
   }
 
   setCapsuleFieldValue("title", draft.title);
+  setCapsuleFieldValue("project", draft.project ?? "");
   setCapsuleFieldValue("goal", draft.goal);
   setCapsuleFieldValue("contextPrompt", draft.contextPrompt);
   setCapsuleFieldValue("reusableContext", draft.reusableContext.join("\n"));
@@ -1267,6 +1274,9 @@ function renderRecentWorkCapsule(capsule: WorkCapsuleV1, container: HTMLDivEleme
   const title = document.createElement("strong");
   title.textContent = capsule.title;
 
+  const label = document.createElement("span");
+  label.textContent = workCapsuleDisplayLabel(capsule);
+
   const updated = document.createElement("span");
   updated.textContent = `Updated ${capsule.updatedAt}`;
 
@@ -1284,7 +1294,7 @@ function renderRecentWorkCapsule(capsule: WorkCapsuleV1, container: HTMLDivEleme
   actions.className = "acv-work-capsule-recent-actions";
   actions.append(button, deleteButton);
 
-  details.append(title, updated);
+  details.append(title, label, updated);
   container.append(details, actions);
 }
 
@@ -1354,8 +1364,19 @@ function renderWorkCapsuleLibraryRow(capsule: WorkCapsuleIndexItem): HTMLDivElem
 }
 
 function workCapsuleLibraryLabel(capsule: WorkCapsuleIndexItem): string {
+  return workCapsuleDisplayLabel(capsule);
+}
+
+function workCapsuleDisplayLabel(capsule: {
+  project?: string;
+  source?: { title: string; url: string };
+  sourceTitle?: string;
+  sourceUrl?: string;
+}): string {
   const project = capsule.project ? compactFieldLine(capsule.project) : "";
-  return project || capsule.sourceTitle || capsule.sourceUrl || "Unknown source";
+  const sourceTitle = "source" in capsule ? capsule.source?.title : capsule.sourceTitle;
+  const sourceUrl = "source" in capsule ? capsule.source?.url : capsule.sourceUrl;
+  return project || sourceTitle || sourceUrl || "Unknown source";
 }
 
 function artifactMarkdownInput(artifact: WorkCapsuleArtifact): string {
@@ -1410,6 +1431,11 @@ function splitTextBlocks(value: string): string[] {
 
 function stringFieldValue(field: string): string {
   return workCapsuleField(field)?.value.trim() ?? "";
+}
+
+function optionalCapsuleField(field: string): Record<string, string> {
+  const value = compactFieldLine(stringFieldValue(field));
+  return value ? { [field]: value } : {};
 }
 
 function setCapsuleFieldValue(field: string, value: string): void {

@@ -106,10 +106,26 @@ describe("work capsule validation", () => {
     expect(validateWorkCapsuleV1(capsule())).toEqual({ ok: true, capsule: capsule() });
   });
 
+  it("accepts and normalizes an optional project label", () => {
+    expect(validateWorkCapsuleV1(capsule({ project: "  Client   Launch  " }))).toEqual({
+      ok: true,
+      capsule: capsule({ project: "Client Launch" })
+    });
+    expect(validateWorkCapsuleV1(capsule({ project: "   " }))).toEqual({
+      ok: true,
+      capsule: capsule()
+    });
+    expect(validateWorkCapsuleV1({ ...capsule(), project: undefined })).toEqual({
+      ok: true,
+      capsule: capsule()
+    });
+  });
+
   it("reports missing required fields and unsupported enum values", () => {
     const result = validateWorkCapsuleV1({
       ...capsule(),
       schemaVersion: "work-capsule/v0",
+      project: 123,
       title: "",
       contextPrompt: "",
       source: {
@@ -127,6 +143,7 @@ describe("work capsule validation", () => {
       expect(result.errors).toEqual(
         expect.arrayContaining([
           "schemaVersion must be work-capsule/v1",
+          "project must be a string",
           "title must be a non-empty string",
           "contextPrompt must be a non-empty string",
           "source.provider must be one of chatgpt",
@@ -215,6 +232,28 @@ Continue the launch plan using only local-first Work Capsule context.
 `);
   });
 
+  it("renders project labels in Markdown and context prompts when present", () => {
+    const projectCapsule = capsule({
+      project: "Client Launch",
+      contextPrompt: "Continue the Client Launch plan."
+    });
+
+    expect(renderWorkCapsuleMarkdown(projectCapsule)).toContain(`## Project
+
+Client Launch
+
+## Goal`);
+
+    const existingSavedCapsule = { ...projectCapsule } as Partial<WorkCapsuleV1>;
+    delete existingSavedCapsule.contextPrompt;
+    const result = validateWorkCapsuleV1(existingSavedCapsule);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.capsule.contextPrompt).toContain("Project: Client Launch");
+    }
+  });
+
   it("renders empty arrays as None and omits excerpts when policy is none", () => {
     expect(
       renderWorkCapsuleMarkdown(
@@ -259,7 +298,7 @@ describe("work capsule storage", () => {
 
   it("creates, lists, gets, updates, and deletes capsules in chrome.storage.local", async () => {
     const storage = installStorageMock();
-    const original = capsule();
+    const original = capsule({ project: "Launch Ops" });
 
     await expect(createWorkCapsule(original)).resolves.toEqual(original);
     expect(storage.store[workCapsuleBodyKey("capsule-1")]).toEqual(original);
@@ -270,6 +309,7 @@ describe("work capsule storage", () => {
       {
         id: "capsule-1",
         title: "Launch Plan",
+        project: "Launch Ops",
         goal: "Ship the first local-only work capsule.",
         sourceTitle: "ChatGPT planning chat",
         sourceUrl: "https://chatgpt.com/c/local-planning",
@@ -283,11 +323,13 @@ describe("work capsule storage", () => {
 
     const updated = await updateWorkCapsule("capsule-1", {
       contextPrompt: "Use this updated context prompt.",
+      project: "Updated Launch Ops",
       title: "Updated Launch Plan",
       updatedAt: "2026-06-01T02:00:00.000Z"
     });
 
     expect(updated?.title).toBe("Updated Launch Plan");
+    expect(updated?.project).toBe("Updated Launch Ops");
     expect(updated?.contextPrompt).toBe("Use this updated context prompt.");
     expect(updated?.updatedAt).toBe("2026-06-01T02:00:00.000Z");
     expect(storage.store[workCapsuleBodyKey("capsule-1")]).toEqual(updated);
@@ -295,6 +337,7 @@ describe("work capsule storage", () => {
       {
         id: "capsule-1",
         title: "Updated Launch Plan",
+        project: "Updated Launch Ops",
         goal: "Ship the first local-only work capsule.",
         sourceTitle: "ChatGPT planning chat",
         sourceUrl: "https://chatgpt.com/c/local-planning",
@@ -321,6 +364,18 @@ describe("work capsule storage", () => {
     });
 
     vi.useRealTimers();
+  });
+
+  it("removes a project label when updated to blank text", async () => {
+    installStorageMock();
+
+    await createWorkCapsule(capsule({ project: "Client Launch" }));
+    const updated = await updateWorkCapsule("capsule-1", { project: "   " });
+
+    expect(updated).not.toHaveProperty("project");
+    await expect(listWorkCapsules()).resolves.toEqual([
+      expect.not.objectContaining({ project: expect.any(String) })
+    ]);
   });
 
   it("finds the newest valid capsule for a source URL while ignoring query and hash", async () => {

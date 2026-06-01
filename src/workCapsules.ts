@@ -51,6 +51,7 @@ export interface WorkCapsuleV1 {
   schemaVersion: typeof WORK_CAPSULE_SCHEMA_VERSION;
   id: string;
   title: string;
+  project?: string;
   goal: string;
   contextPrompt: string;
   reusableContext: string[];
@@ -125,6 +126,7 @@ export function validateWorkCapsuleV1(value: unknown): WorkCapsuleValidationResu
   requireExactString(value, "schemaVersion", WORK_CAPSULE_SCHEMA_VERSION, errors);
   requireString(value, "id", errors);
   requireString(value, "title", errors);
+  normalizeOptionalString(normalizedValue, value, "project", errors);
   requireString(value, "goal", errors);
   if (hasContextPrompt) {
     requireString(value, "contextPrompt", errors);
@@ -172,6 +174,7 @@ export function assertWorkCapsuleV1(value: unknown): WorkCapsuleV1 {
 export function renderWorkCapsuleMarkdown(capsule: WorkCapsuleV1): string {
   const sections = [
     renderScalarSection("Title", capsule.title),
+    ...renderOptionalScalarSections("Project", capsule.project),
     renderScalarSection("Goal", capsule.goal),
     renderScalarSection("Context Prompt", capsule.contextPrompt),
     renderStringListSection("Reusable Context", capsule.reusableContext),
@@ -193,9 +196,14 @@ export function buildWorkCapsuleContextPrompt(
   const lines = [
     "Use this Work Capsule to continue the work in a new AI chat.",
     "",
-    `Title: ${compactPromptText(capsule.title, 160)}`,
-    `Goal: ${compactPromptText(capsule.goal, 400)}`
+    `Title: ${compactPromptText(capsule.title, 160)}`
   ];
+
+  if (capsule.project) {
+    lines.push(`Project: ${compactPromptText(capsule.project, 160)}`);
+  }
+
+  lines.push(`Goal: ${compactPromptText(capsule.goal, 400)}`);
 
   appendStringPromptSection(lines, "Reusable context", capsule.reusableContext);
   appendItemPromptSection(lines, "Decisions", capsule.decisions);
@@ -332,6 +340,11 @@ export async function deleteWorkCapsule(id: string): Promise<void> {
 
 function renderScalarSection(title: string, value: string): string {
   return `## ${title}\n\n${value}`;
+}
+
+function renderOptionalScalarSections(title: string, value: string | undefined): string[] {
+  const compacted = compactString(value);
+  return compacted ? [renderScalarSection(title, compacted)] : [];
 }
 
 function renderStringListSection(title: string, items: string[]): string {
@@ -588,6 +601,35 @@ function requireString(
   if (typeof value[key] !== "string" || value[key].trim().length === 0) {
     errors.push(`${path} must be a non-empty string`);
   }
+}
+
+function normalizeOptionalString(
+  normalizedValue: Record<string, unknown>,
+  value: Record<string, unknown>,
+  key: string,
+  errors: string[]
+): void {
+  if (!Object.prototype.hasOwnProperty.call(value, key)) {
+    return;
+  }
+
+  if (value[key] === undefined) {
+    delete normalizedValue[key];
+    return;
+  }
+
+  if (typeof value[key] !== "string") {
+    errors.push(`${key} must be a string`);
+    return;
+  }
+
+  const compacted = compactString(value[key]);
+  if (compacted) {
+    normalizedValue[key] = compacted;
+    return;
+  }
+
+  delete normalizedValue[key];
 }
 
 function requireExactString(

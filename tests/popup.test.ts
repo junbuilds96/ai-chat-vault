@@ -643,6 +643,7 @@ describe("toolbar popup", () => {
     expect(workCapsuleSection().hidden).toBe(false);
     expect(workCapsuleFields().hidden).toBe(false);
     expect(capsuleField("title").value).toBe("Popup Test - ChatGPT");
+    expect(capsuleField("project").value).toBe("");
     expect(capsuleField("goal").value).toBe(
       "Reuse selected context from Popup Test - ChatGPT."
     );
@@ -692,6 +693,9 @@ describe("toolbar popup", () => {
 
     capsuleField("title").value = "Edited Capsule";
     capsuleField("title").dispatchEvent(new Event("input", { bubbles: true }));
+    capsuleField("project").value = "Client Launch";
+    capsuleField("project").dispatchEvent(new Event("input", { bubbles: true }));
+    expect(capsuleField("contextPrompt").value).toContain("Project: Client Launch");
     capsuleField("goal").value = "Carry edited context into the next session.";
     capsuleField("goal").dispatchEvent(new Event("input", { bubbles: true }));
     expect(capsuleField("contextPrompt").value).toContain(
@@ -714,6 +718,7 @@ describe("toolbar popup", () => {
 
     const copied = writeText.mock.calls[0][0] as string;
     expect(copied).toContain("Edited Capsule");
+    expect(copied).toContain("## Project\n\nClient Launch");
     expect(copied).toContain("Carry edited context into the next session.");
     expect(copied).toContain(
       "## Context Prompt\n\nUse this hand-edited bridge prompt exactly."
@@ -742,6 +747,9 @@ describe("toolbar popup", () => {
     capsuleField("title").value = "Assistant Answer Capsule";
     capsuleField("title").dispatchEvent(new Event("input", { bubbles: true }));
     expect(capsuleField("contextPrompt").value).toContain("Title: Assistant Answer Capsule");
+    capsuleField("project").value = "Answer Reuse";
+    capsuleField("project").dispatchEvent(new Event("input", { bubbles: true }));
+    expect(capsuleField("contextPrompt").value).toContain("Project: Answer Reuse");
     capsuleField("facts").value = "The assistant answered the first question.";
     capsuleField("facts").dispatchEvent(new Event("input", { bubbles: true }));
     expect(capsuleField("contextPrompt").value).toContain(
@@ -753,6 +761,7 @@ describe("toolbar popup", () => {
 
     const saved = savedCapsules(chromeMock.store)[0] as {
       title: string;
+      project?: string;
       contextPrompt: string;
       facts: Array<{ text: string }>;
       source: { selectedTurnIds: string[] };
@@ -760,6 +769,7 @@ describe("toolbar popup", () => {
     };
     expect(saved).toMatchObject({
       title: "Assistant Answer Capsule",
+      project: "Answer Reuse",
       contextPrompt: expect.stringContaining("Title: Assistant Answer Capsule"),
       facts: [{ id: "fact-1", text: "The assistant answered the first question." }],
       source: { selectedTurnIds: ["message-2"] },
@@ -774,6 +784,7 @@ describe("toolbar popup", () => {
       expect.objectContaining({
         id: expect.any(String),
         title: "Assistant Answer Capsule",
+        project: "Answer Reuse",
         sourceTitle: "Popup Test - ChatGPT",
         sourceUrl: "https://chatgpt.com/c/test"
       })
@@ -782,12 +793,13 @@ describe("toolbar popup", () => {
   });
 
   it("shows and reopens the most recent saved Work Capsule for the captured conversation", async () => {
-    const saved = workCapsule();
+    const saved = workCapsule({ project: "Current Client" });
     installChromeMock("https://chatgpt.com/c/test?model=gpt-5", {
       [WORK_CAPSULE_INDEX_KEY]: [
         {
           id: saved.id,
           title: saved.title,
+          project: saved.project,
           goal: saved.goal,
           sourceTitle: saved.source.title,
           sourceUrl: "https://chatgpt.com/c/test/",
@@ -807,7 +819,7 @@ describe("toolbar popup", () => {
     expect(workCapsuleFields().hidden).toBe(true);
     expect(workCapsuleRecent().hidden).toBe(false);
     expect(workCapsuleRecent().textContent).toBe(
-      "Saved Retrieval CapsuleUpdated 2026-06-01T02:00:00.000ZReopenDelete"
+      "Saved Retrieval CapsuleCurrent ClientUpdated 2026-06-01T02:00:00.000ZReopenDelete"
     );
     expect(document.querySelector("[data-acv-work-capsule-context]")?.textContent).toBe(
       "Recent capsule available"
@@ -819,6 +831,7 @@ describe("toolbar popup", () => {
     expect(workCapsuleRecent().hidden).toBe(true);
     expect(workCapsuleFields().hidden).toBe(false);
     expect(capsuleField("title").value).toBe("Saved Retrieval Capsule");
+    expect(capsuleField("project").value).toBe("Current Client");
     expect(capsuleField("goal").value).toBe(
       "Resume the saved work capsule from this conversation."
     );
@@ -897,6 +910,7 @@ describe("toolbar popup", () => {
     const saved = workCapsule({
       id: "capsule-library",
       title: "Library Body Capsule",
+      project: "Library Project",
       goal: "Resume this capsule from the library, not the current thread.",
       contextPrompt: "Library context prompt should stay editable.",
       source: {
@@ -913,6 +927,7 @@ describe("toolbar popup", () => {
         {
           id: saved.id,
           title: saved.title,
+          project: saved.project,
           goal: saved.goal,
           sourceTitle: saved.source.title,
           sourceUrl: saved.source.url,
@@ -933,6 +948,7 @@ describe("toolbar popup", () => {
 
     expect(workCapsuleFields().hidden).toBe(false);
     expect(capsuleField("title").value).toBe("Library Body Capsule");
+    expect(capsuleField("project").value).toBe("Library Project");
     expect(capsuleField("goal").value).toBe(
       "Resume this capsule from the library, not the current thread."
     );
@@ -1082,6 +1098,8 @@ describe("toolbar popup", () => {
     button("create-capsule").click();
     await flushAsyncClick();
 
+    capsuleField("project").value = "Bridge Project";
+    capsuleField("project").dispatchEvent(new Event("input", { bubbles: true }));
     capsuleField("contextPrompt").value = "Resume with this edited local bridge prompt.";
     capsuleField("contextPrompt").dispatchEvent(new Event("input", { bubbles: true }));
 
@@ -1089,6 +1107,7 @@ describe("toolbar popup", () => {
     await flushAsyncClick();
 
     const saved = savedCapsules(chromeMock.store)[0] as WorkCapsuleV1;
+    expect(saved.project).toBe("Bridge Project");
     expect(saved.contextPrompt).toBe("Resume with this edited local bridge prompt.");
 
     button("capture").click();
@@ -1100,11 +1119,44 @@ describe("toolbar popup", () => {
     expect(capsuleField("contextPrompt").value).toBe(
       "Resume with this edited local bridge prompt."
     );
+    expect(capsuleField("project").value).toBe("Bridge Project");
     capsuleField("goal").value = "Change another field after reopen.";
     capsuleField("goal").dispatchEvent(new Event("input", { bubbles: true }));
     expect(capsuleField("contextPrompt").value).toBe(
       "Resume with this edited local bridge prompt."
     );
+  });
+
+  it("removes a saved Work Capsule project label when the reopened field is cleared", async () => {
+    const chromeMock = installChromeMock();
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+    button("create-capsule").click();
+    await flushAsyncClick();
+
+    capsuleField("project").value = "Temporary Project";
+    capsuleField("project").dispatchEvent(new Event("input", { bubbles: true }));
+    button("save-capsule").click();
+    await flushAsyncClick();
+
+    button("capture").click();
+    await flushAsyncClick();
+    button("reopen-capsule").click();
+    await flushAsyncClick();
+
+    capsuleField("project").value = "";
+    capsuleField("project").dispatchEvent(new Event("input", { bubbles: true }));
+    button("save-capsule").click();
+    await flushAsyncClick();
+
+    const saved = savedCapsules(chromeMock.store)[0] as WorkCapsuleV1;
+    expect(saved).not.toHaveProperty("project");
+    expect(chromeMock.store[WORK_CAPSULE_INDEX_KEY]).toEqual([
+      expect.not.objectContaining({ project: expect.any(String) })
+    ]);
   });
 
   it("keeps a recent saved Work Capsule when delete confirmation is canceled", async () => {
@@ -1142,7 +1194,7 @@ describe("toolbar popup", () => {
     expect(chromeMock.remove).not.toHaveBeenCalled();
     expect(workCapsuleRecent().hidden).toBe(false);
     expect(workCapsuleRecent().textContent).toBe(
-      "Saved Retrieval CapsuleUpdated 2026-06-01T02:00:00.000ZReopenDelete"
+      "Saved Retrieval CapsulePopup Test - ChatGPTUpdated 2026-06-01T02:00:00.000ZReopenDelete"
     );
     expect(status()).toBe("Capsule delete canceled");
   });
