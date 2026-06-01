@@ -5,7 +5,7 @@ This project keeps the extension privacy model local-only for Chrome Web Store r
 ## Privacy Disclosure
 
 - Data collection: none. The extension does not collect, sell, transmit, or store user data.
-- Conversation access: the content script reads the rendered ChatGPT page DOM only after the user clicks Capture.
+- Conversation access: the content script can read the rendered ChatGPT page DOM on supported hosts, but the user-facing controls live in the Chrome toolbar popup instead of a persistent in-page overlay.
 - User-initiated output: Copy writes selected Markdown to the browser clipboard; Download creates a local `.md` file.
 - Remote services: none. There is no backend, analytics, telemetry, or remote code.
 - Persistence: none. The manifest does not request extension storage permissions.

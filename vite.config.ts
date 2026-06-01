@@ -8,7 +8,8 @@ export default defineConfig({
     outDir: "dist",
     rollupOptions: {
       input: {
-        content: resolve(__dirname, "src/content.ts")
+        content: resolve(__dirname, "src/content.ts"),
+        popup: resolve(__dirname, "popup.html")
       },
       output: {
         assetFileNames: "assets/[name][extname]",

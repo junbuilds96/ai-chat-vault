@@ -1,48 +1,44 @@
-#ai-chat-vault {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 2147483647;
-  width: min(380px, calc(100vw - 32px));
+body {
+  width: 380px;
+  min-height: 420px;
+  margin: 0;
   color: #1f2933;
   background: #ffffff;
-  border: 1px solid #d7dde5;
-  border-radius: 8px;
-  box-shadow: 0 16px 44px rgb(15 23 42 / 18%);
   font: 13px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-#ai-chat-vault * {
+* {
   box-sizing: border-box;
 }
 
-#ai-chat-vault .acv-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
+.acv-popup {
+  width: 380px;
+  max-width: 100vw;
+}
+
+.acv-header {
   padding: 12px 12px 8px;
   border-bottom: 1px solid #edf0f3;
 }
 
-#ai-chat-vault .acv-header strong {
+.acv-header strong {
+  display: block;
   font-size: 14px;
 }
 
-#ai-chat-vault .acv-header span {
+.acv-header span {
   color: #697586;
   font-size: 12px;
-  white-space: nowrap;
 }
 
-#ai-chat-vault .acv-actions {
+.acv-actions {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   padding: 10px 12px;
 }
 
-#ai-chat-vault button {
+button {
   min-height: 32px;
   color: #ffffff;
   background: #2563eb;
@@ -53,33 +49,33 @@
   font-weight: 650;
 }
 
-#ai-chat-vault button:hover {
+button:hover {
   background: #1d4ed8;
 }
 
-#ai-chat-vault button:focus-visible,
-#ai-chat-vault input:focus-visible,
-#ai-chat-vault textarea:focus-visible {
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
   outline: 2px solid #f97316;
   outline-offset: 2px;
 }
 
-#ai-chat-vault .acv-message-panel {
+.acv-message-panel {
   margin: 0 12px 10px;
 }
 
-#ai-chat-vault .acv-message-panel[hidden] {
+.acv-message-panel[hidden] {
   display: none;
 }
 
-#ai-chat-vault .acv-selection-actions {
+.acv-selection-actions {
   display: flex;
   gap: 6px;
   justify-content: flex-end;
   margin-bottom: 6px;
 }
 
-#ai-chat-vault .acv-selection-actions button {
+.acv-selection-actions button {
   min-height: 26px;
   padding: 0 8px;
   color: #1f2937;
@@ -88,11 +84,11 @@
   font-weight: 600;
 }
 
-#ai-chat-vault .acv-selection-actions button:hover {
+.acv-selection-actions button:hover {
   background: #d1d5db;
 }
 
-#ai-chat-vault .acv-message-list {
+.acv-message-list {
   display: grid;
   gap: 4px;
   max-height: 144px;
@@ -103,7 +99,7 @@
   border-radius: 6px;
 }
 
-#ai-chat-vault .acv-message-row {
+.acv-message-row {
   display: grid;
   grid-template-columns: 16px 1fr;
   gap: 8px;
@@ -113,27 +109,27 @@
   cursor: pointer;
 }
 
-#ai-chat-vault .acv-message-row input {
+.acv-message-row input {
   width: 14px;
   height: 14px;
   margin: 2px 0 0;
   accent-color: #2563eb;
 }
 
-#ai-chat-vault .acv-message-details {
+.acv-message-details {
   display: grid;
   min-width: 0;
   gap: 1px;
 }
 
-#ai-chat-vault .acv-message-details strong {
+.acv-message-details strong {
   color: #334155;
   font-size: 11px;
   line-height: 1.2;
   text-transform: capitalize;
 }
 
-#ai-chat-vault .acv-message-details span {
+.acv-message-details span {
   overflow: hidden;
   color: #4b5563;
   font-size: 12px;
@@ -142,11 +138,11 @@
   white-space: nowrap;
 }
 
-#ai-chat-vault textarea {
+textarea {
   display: block;
   width: calc(100% - 24px);
   min-height: 180px;
-  max-height: 42vh;
+  max-height: 300px;
   margin: 0 12px;
   padding: 10px;
   resize: vertical;
@@ -157,17 +153,9 @@
   font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-#ai-chat-vault .acv-status {
+.acv-status {
   min-height: 32px;
   padding: 8px 12px 12px;
   color: #4b5563;
   font-size: 12px;
-}
-
-@media (max-width: 520px) {
-  #ai-chat-vault {
-    right: 10px;
-    bottom: 10px;
-    width: calc(100vw - 20px);
-  }
 }

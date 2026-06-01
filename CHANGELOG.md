@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Added Select all and Select none controls for detected-message export selection.
+- Moved capture, selection, preview, copy, and download controls into a Chrome toolbar popup instead of an in-page bottom-right panel.
 - Preserved strikethrough and nested list structure in Markdown exports.
 
 ## 0.1.0
