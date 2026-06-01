@@ -32,6 +32,7 @@ function workCapsule(overrides: Partial<WorkCapsuleV1> = {}): WorkCapsuleV1 {
     id: "capsule-saved",
     title: "Saved Retrieval Capsule",
     goal: "Resume the saved work capsule from this conversation.",
+    contextPrompt: "Edited saved context prompt for the next AI chat.",
     reusableContext: ["Existing reusable context"],
     decisions: [{ id: "decision-1", text: "Keep the retrieval path local-only." }],
     constraints: [{ id: "constraint-1", text: "Do not create a new capsule automatically." }],
@@ -627,6 +628,16 @@ describe("toolbar popup", () => {
     expect(capsuleField("goal").value).toBe(
       "Reuse selected context from Popup Test - ChatGPT."
     );
+    expect(capsuleField("contextPrompt").value).toContain(
+      "Use this Work Capsule to continue the work in a new AI chat."
+    );
+    expect(capsuleField("contextPrompt").value).toContain(
+      "Goal: Reuse selected context from Popup Test - ChatGPT."
+    );
+    expect(capsuleField("contextPrompt").value).toContain(
+      "- message-2 (assistant): Answer two"
+    );
+    expect(capsuleField("contextPrompt").value).not.toContain("Follow-up three");
     expect(capsuleField("reusableContext").value).toContain("1. User: Question one");
     expect(capsuleField("reusableContext").value).toContain("2. Assistant: Answer two");
     expect(capsuleField("reusableContext").value).not.toContain("Follow-up three");
@@ -665,8 +676,18 @@ describe("toolbar popup", () => {
     capsuleField("title").dispatchEvent(new Event("input", { bubbles: true }));
     capsuleField("goal").value = "Carry edited context into the next session.";
     capsuleField("goal").dispatchEvent(new Event("input", { bubbles: true }));
+    expect(capsuleField("contextPrompt").value).toContain(
+      "Goal: Carry edited context into the next session."
+    );
     capsuleField("decisions").value = "Keep the popup local-only";
     capsuleField("decisions").dispatchEvent(new Event("input", { bubbles: true }));
+    expect(capsuleField("contextPrompt").value).toContain(
+      "Decisions:\n- Keep the popup local-only"
+    );
+    capsuleField("contextPrompt").value = "Use this hand-edited bridge prompt exactly.";
+    capsuleField("contextPrompt").dispatchEvent(new Event("input", { bubbles: true }));
+    capsuleField("facts").value = "A later field edit should not overwrite the bridge.";
+    capsuleField("facts").dispatchEvent(new Event("input", { bubbles: true }));
     capsuleField("nextActions").value = "Review this capsule tomorrow";
     capsuleField("nextActions").dispatchEvent(new Event("input", { bubbles: true }));
 
@@ -676,7 +697,11 @@ describe("toolbar popup", () => {
     const copied = writeText.mock.calls[0][0] as string;
     expect(copied).toContain("Edited Capsule");
     expect(copied).toContain("Carry edited context into the next session.");
+    expect(copied).toContain(
+      "## Context Prompt\n\nUse this hand-edited bridge prompt exactly."
+    );
     expect(copied).toContain("- Keep the popup local-only");
+    expect(copied).toContain("- A later field edit should not overwrite the bridge.");
     expect(copied).toContain("- [todo] @user Review this capsule tomorrow");
     expect(status()).toBe("Copied capsule Markdown to clipboard");
   });
@@ -698,24 +723,33 @@ describe("toolbar popup", () => {
     await flushAsyncClick();
     capsuleField("title").value = "Assistant Answer Capsule";
     capsuleField("title").dispatchEvent(new Event("input", { bubbles: true }));
+    expect(capsuleField("contextPrompt").value).toContain("Title: Assistant Answer Capsule");
     capsuleField("facts").value = "The assistant answered the first question.";
     capsuleField("facts").dispatchEvent(new Event("input", { bubbles: true }));
+    expect(capsuleField("contextPrompt").value).toContain(
+      "Facts:\n- The assistant answered the first question."
+    );
 
     button("save-capsule").click();
     await flushAsyncClick();
 
     const saved = savedCapsules(chromeMock.store)[0] as {
       title: string;
+      contextPrompt: string;
       facts: Array<{ text: string }>;
       source: { selectedTurnIds: string[] };
       excerpts: Array<{ turnId: string; role: string; text: string }>;
     };
     expect(saved).toMatchObject({
       title: "Assistant Answer Capsule",
+      contextPrompt: expect.stringContaining("Title: Assistant Answer Capsule"),
       facts: [{ id: "fact-1", text: "The assistant answered the first question." }],
       source: { selectedTurnIds: ["message-2"] },
       excerpts: [{ id: "excerpt-2", turnId: "message-2", role: "assistant", text: "Answer two" }]
     });
+    expect(saved.contextPrompt).toContain(
+      "Facts:\n- The assistant answered the first question."
+    );
     expect(JSON.stringify(saved)).not.toContain("Question one");
     expect(JSON.stringify(saved)).not.toContain("Follow-up three");
     expect(chromeMock.store[WORK_CAPSULE_INDEX_KEY]).toEqual([
@@ -770,6 +804,9 @@ describe("toolbar popup", () => {
     expect(capsuleField("goal").value).toBe(
       "Resume the saved work capsule from this conversation."
     );
+    expect(capsuleField("contextPrompt").value).toBe(
+      "Edited saved context prompt for the next AI chat."
+    );
     expect(capsuleField("facts").value).toBe(
       "The saved capsule belongs to this ChatGPT URL."
     );
@@ -811,6 +848,41 @@ describe("toolbar popup", () => {
 
     expect(recentDeleteButton?.textContent).toBe("Delete");
     expect(draftDeleteButton?.hidden).toBe(true);
+  });
+
+  it("preserves an edited Work Capsule context prompt after save and reopen", async () => {
+    const chromeMock = installChromeMock();
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+    button("create-capsule").click();
+    await flushAsyncClick();
+
+    capsuleField("contextPrompt").value = "Resume with this edited local bridge prompt.";
+    capsuleField("contextPrompt").dispatchEvent(new Event("input", { bubbles: true }));
+
+    button("save-capsule").click();
+    await flushAsyncClick();
+
+    const saved = savedCapsules(chromeMock.store)[0] as WorkCapsuleV1;
+    expect(saved.contextPrompt).toBe("Resume with this edited local bridge prompt.");
+
+    button("capture").click();
+    await flushAsyncClick();
+
+    button("reopen-capsule").click();
+    await flushAsyncClick();
+
+    expect(capsuleField("contextPrompt").value).toBe(
+      "Resume with this edited local bridge prompt."
+    );
+    capsuleField("goal").value = "Change another field after reopen.";
+    capsuleField("goal").dispatchEvent(new Event("input", { bubbles: true }));
+    expect(capsuleField("contextPrompt").value).toBe(
+      "Resume with this edited local bridge prompt."
+    );
   });
 
   it("keeps a recent saved Work Capsule when delete confirmation is canceled", async () => {
@@ -911,16 +983,19 @@ describe("toolbar popup", () => {
     await flushAsyncClick();
     button("create-capsule").click();
     await flushAsyncClick();
+    capsuleField("contextPrompt").value = "Paste this exact context prompt into a new chat.";
+    capsuleField("contextPrompt").dispatchEvent(new Event("input", { bubbles: true }));
 
     button("copy-capsule-context").click();
     await flushAsyncClick();
-    expect(writeText.mock.calls[0][0]).toContain("Title: Popup Test - ChatGPT");
-    expect(writeText.mock.calls[0][0]).toContain("- message-1 (user): Question one");
-    expect(writeText.mock.calls[0][0]).toContain("- message-2 (assistant): Answer two");
+    expect(writeText.mock.calls[0][0]).toBe("Paste this exact context prompt into a new chat.");
     expect(status()).toBe("Copied capsule context to clipboard");
 
     button("copy-capsule-markdown").click();
     await flushAsyncClick();
+    expect(writeText.mock.calls[1][0]).toContain(
+      "## Context Prompt\n\nPaste this exact context prompt into a new chat."
+    );
     expect(writeText.mock.calls[1][0]).toContain("## Source");
     expect(writeText.mock.calls[1][0]).toContain(
       "- Selected turn IDs: message-1, message-2, message-3"

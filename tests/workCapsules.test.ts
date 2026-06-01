@@ -21,6 +21,7 @@ function capsule(overrides: Partial<WorkCapsuleV1> = {}): WorkCapsuleV1 {
     id: "capsule-1",
     title: "Launch Plan",
     goal: "Ship the first local-only work capsule.",
+    contextPrompt: "Continue the launch plan using only local-first Work Capsule context.",
     reusableContext: ["Use Chrome local storage only."],
     decisions: [{ id: "decision-1", text: "Keep Week 1 UI out of scope." }],
     constraints: [{ id: "constraint-1", text: "Do not call network APIs." }],
@@ -110,6 +111,7 @@ describe("work capsule validation", () => {
       ...capsule(),
       schemaVersion: "work-capsule/v0",
       title: "",
+      contextPrompt: "",
       source: {
         ...capsule().source,
         provider: "other"
@@ -126,6 +128,7 @@ describe("work capsule validation", () => {
         expect.arrayContaining([
           "schemaVersion must be work-capsule/v1",
           "title must be a non-empty string",
+          "contextPrompt must be a non-empty string",
           "source.provider must be one of chatgpt",
           "sourceExcerptPolicy must be one of none, selected-excerpts",
           "nextActions[0].status must be one of todo, doing, done",
@@ -133,6 +136,26 @@ describe("work capsule validation", () => {
           "artifacts[0].type must be one of spec, prompt, checklist, decision-record, research-brief, other",
           "excerpts[0].role must be one of user, assistant, system, unknown"
         ])
+      );
+    }
+  });
+
+  it("backfills contextPrompt when reading existing saved v1 capsules", () => {
+    const existingSavedCapsule = { ...capsule() } as Partial<WorkCapsuleV1>;
+    delete existingSavedCapsule.contextPrompt;
+
+    const result = validateWorkCapsuleV1(existingSavedCapsule);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.capsule.contextPrompt).toContain(
+        "Use this Work Capsule to continue the work in a new AI chat."
+      );
+      expect(result.capsule.contextPrompt).toContain(
+        "Goal: Ship the first local-only work capsule."
+      );
+      expect(result.capsule.contextPrompt).toContain(
+        "- turn-2 (assistant): Keep storage local-only."
       );
     }
   });
@@ -147,6 +170,10 @@ Launch Plan
 ## Goal
 
 Ship the first local-only work capsule.
+
+## Context Prompt
+
+Continue the launch plan using only local-first Work Capsule context.
 
 ## Reusable Context
 
@@ -236,6 +263,9 @@ describe("work capsule storage", () => {
 
     await expect(createWorkCapsule(original)).resolves.toEqual(original);
     expect(storage.store[workCapsuleBodyKey("capsule-1")]).toEqual(original);
+    expect(storage.store[workCapsuleBodyKey("capsule-1")]).toMatchObject({
+      contextPrompt: "Continue the launch plan using only local-first Work Capsule context."
+    });
     expect(storage.store[WORK_CAPSULE_INDEX_KEY]).toEqual([
       {
         id: "capsule-1",
@@ -252,11 +282,13 @@ describe("work capsule storage", () => {
     await expect(getWorkCapsule("capsule-1")).resolves.toEqual(original);
 
     const updated = await updateWorkCapsule("capsule-1", {
+      contextPrompt: "Use this updated context prompt.",
       title: "Updated Launch Plan",
       updatedAt: "2026-06-01T02:00:00.000Z"
     });
 
     expect(updated?.title).toBe("Updated Launch Plan");
+    expect(updated?.contextPrompt).toBe("Use this updated context prompt.");
     expect(updated?.updatedAt).toBe("2026-06-01T02:00:00.000Z");
     expect(storage.store[workCapsuleBodyKey("capsule-1")]).toEqual(updated);
     expect(storage.store[WORK_CAPSULE_INDEX_KEY]).toEqual([

@@ -30,12 +30,14 @@ import {
 } from "./prompts";
 import {
   WORK_CAPSULE_SCHEMA_VERSION,
+  buildWorkCapsuleContextPrompt,
   createWorkCapsule,
   deleteWorkCapsule,
   findMostRecentWorkCapsuleBySourceUrl,
   renderWorkCapsuleMarkdown,
   type WorkCapsuleAction,
   type WorkCapsuleArtifact,
+  type WorkCapsuleContextPromptSource,
   type WorkCapsuleItem,
   type WorkCapsuleV1
 } from "./workCapsules";
@@ -57,6 +59,7 @@ interface PopupState {
   bookmarks: ConversationBookmark[];
   recentWorkCapsule: WorkCapsuleV1 | null;
   workCapsuleDraft: WorkCapsuleV1 | null;
+  workCapsuleContextPromptEdited: boolean;
 }
 
 const state: PopupState = {
@@ -73,7 +76,8 @@ const state: PopupState = {
   conversationNoteIdentity: "",
   bookmarks: [],
   recentWorkCapsule: null,
-  workCapsuleDraft: null
+  workCapsuleDraft: null,
+  workCapsuleContextPromptEdited: false
 };
 
 const NAVIGATOR_ROLES: MessageNavigatorRole[] = ["all", "user", "assistant", "system"];
@@ -153,6 +157,10 @@ function initPopup(): void {
           <label>
             <span>Goal</span>
             <textarea data-acv-capsule-field="goal" aria-label="Work capsule goal"></textarea>
+          </label>
+          <label>
+            <span>Context prompt</span>
+            <textarea data-acv-capsule-field="contextPrompt" aria-label="Work capsule context prompt"></textarea>
           </label>
           <label>
             <span>Reusable context</span>
@@ -370,6 +378,9 @@ function handlePopupInput(event: Event): void {
     HTMLInputElement | HTMLTextAreaElement
   >("[data-acv-capsule-field]");
   if (capsuleField) {
+    if (capsuleField.dataset.acvCapsuleField === "contextPrompt") {
+      state.workCapsuleContextPromptEdited = true;
+    }
     updateWorkCapsuleDraftFromFields();
     setStatus("Unsaved capsule changes");
     return;
@@ -555,6 +566,7 @@ async function updateCapturedConversation(conversation: ConversationExport): Pro
   state.focusedMessageIndex = null;
   state.conversationNoteIdentity = conversationNoteIdentity(conversation);
   state.workCapsuleDraft = null;
+  state.workCapsuleContextPromptEdited = false;
   state.recentWorkCapsule = null;
   const [conversationNote, bookmarks, recentWorkCapsule] = await Promise.all([
     loadConversationNote(conversation),
@@ -982,7 +994,7 @@ function createCapsuleDraftFromSelection(): void {
   const selectedIndexes = sortedSelectedMessageIndexes();
   const now = new Date().toISOString();
 
-  state.workCapsuleDraft = {
+  const draftWithoutContextPrompt: WorkCapsuleContextPromptSource = {
     schemaVersion: WORK_CAPSULE_SCHEMA_VERSION,
     id: uniqueWorkCapsuleId(),
     title: conversation.title || "ChatGPT Work Capsule",
@@ -1018,6 +1030,11 @@ function createCapsuleDraftFromSelection(): void {
     createdAt: now,
     updatedAt: now
   };
+  state.workCapsuleDraft = {
+    ...draftWithoutContextPrompt,
+    contextPrompt: buildWorkCapsuleContextPrompt(draftWithoutContextPrompt)
+  };
+  state.workCapsuleContextPromptEdited = false;
 
   renderWorkCapsuleSection();
   setStatus(`Created capsule draft from ${conversation.messages.length} selected message${conversation.messages.length === 1 ? "" : "s"}`);
@@ -1037,6 +1054,7 @@ function reopenRecentWorkCapsule(): void {
   }
 
   state.workCapsuleDraft = state.recentWorkCapsule;
+  state.workCapsuleContextPromptEdited = true;
   renderWorkCapsuleSection();
   setStatus("Reopened saved capsule");
 }
@@ -1072,7 +1090,7 @@ async function deleteCurrentWorkCapsule(): Promise<void> {
 
 async function copyCurrentWorkCapsuleContext(): Promise<void> {
   const capsule = currentWorkCapsuleDraft();
-  await navigator.clipboard.writeText(capsuleContextText(capsule));
+  await navigator.clipboard.writeText(capsule.contextPrompt);
   setStatus("Copied capsule context to clipboard");
 }
 
@@ -1106,7 +1124,7 @@ function updateWorkCapsuleDraftFromFields(): void {
     return;
   }
 
-  state.workCapsuleDraft = {
+  const nextDraftWithoutContextPrompt = {
     ...draft,
     title: stringFieldValue("title") || "Untitled Work Capsule",
     goal: stringFieldValue("goal") || "Capture reusable context from selected messages.",
@@ -1119,6 +1137,17 @@ function updateWorkCapsuleDraftFromFields(): void {
     artifacts: workCapsuleArtifacts(),
     updatedAt: new Date().toISOString()
   };
+
+  state.workCapsuleDraft = {
+    ...nextDraftWithoutContextPrompt,
+    contextPrompt: state.workCapsuleContextPromptEdited
+      ? stringFieldValue("contextPrompt")
+      : buildWorkCapsuleContextPrompt(nextDraftWithoutContextPrompt)
+  };
+
+  if (!state.workCapsuleContextPromptEdited) {
+    setCapsuleFieldValue("contextPrompt", state.workCapsuleDraft.contextPrompt);
+  }
 }
 
 function renderWorkCapsuleSection(): void {
@@ -1157,6 +1186,7 @@ function renderWorkCapsuleSection(): void {
 
   setCapsuleFieldValue("title", draft.title);
   setCapsuleFieldValue("goal", draft.goal);
+  setCapsuleFieldValue("contextPrompt", draft.contextPrompt);
   setCapsuleFieldValue("reusableContext", draft.reusableContext.join("\n"));
   setCapsuleFieldValue("decisions", draft.decisions.map((item) => item.text).join("\n"));
   setCapsuleFieldValue("constraints", draft.constraints.map((item) => item.text).join("\n"));
@@ -1195,25 +1225,6 @@ function renderRecentWorkCapsule(capsule: WorkCapsuleV1, container: HTMLDivEleme
 
   details.append(title, updated);
   container.append(details, actions);
-}
-
-function capsuleContextText(capsule: WorkCapsuleV1): string {
-  return [
-    `Title: ${capsule.title}`,
-    `Goal: ${capsule.goal}`,
-    "",
-    "Reusable Context:",
-    capsule.reusableContext.length > 0
-      ? capsule.reusableContext.map((item) => `- ${item}`).join("\n")
-      : "- None",
-    "",
-    "Selected Excerpts:",
-    capsule.excerpts.length > 0
-      ? capsule.excerpts
-        .map((excerpt) => `- ${excerpt.turnId} (${excerpt.role}): ${excerpt.text}`)
-        .join("\n")
-      : "- None"
-  ].join("\n");
 }
 
 function artifactMarkdownInput(artifact: WorkCapsuleArtifact): string {

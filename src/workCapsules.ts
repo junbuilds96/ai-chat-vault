@@ -52,6 +52,7 @@ export interface WorkCapsuleV1 {
   id: string;
   title: string;
   goal: string;
+  contextPrompt: string;
   reusableContext: string[];
   decisions: WorkCapsuleItem[];
   constraints: WorkCapsuleItem[];
@@ -65,6 +66,10 @@ export interface WorkCapsuleV1 {
   createdAt: string;
   updatedAt: string;
 }
+
+export type WorkCapsuleContextPromptSource = Omit<WorkCapsuleV1, "contextPrompt"> & {
+  contextPrompt?: string;
+};
 
 export interface WorkCapsuleIndexItem {
   id: string;
@@ -113,10 +118,16 @@ export function validateWorkCapsuleV1(value: unknown): WorkCapsuleValidationResu
     return { ok: false, errors: ["capsule must be an object"] };
   }
 
+  const normalizedValue: Record<string, unknown> = { ...value };
+  const hasContextPrompt = Object.prototype.hasOwnProperty.call(value, "contextPrompt");
+
   requireExactString(value, "schemaVersion", WORK_CAPSULE_SCHEMA_VERSION, errors);
   requireString(value, "id", errors);
   requireString(value, "title", errors);
   requireString(value, "goal", errors);
+  if (hasContextPrompt) {
+    requireString(value, "contextPrompt", errors);
+  }
   requireString(value, "createdAt", errors);
   requireString(value, "updatedAt", errors);
   validateStringArray(value, "reusableContext", errors);
@@ -135,11 +146,17 @@ export function validateWorkCapsuleV1(value: unknown): WorkCapsuleValidationResu
   );
   validateExcerptArray(value, "excerpts", errors);
 
+  if (!hasContextPrompt && errors.length === 0) {
+    normalizedValue.contextPrompt = buildWorkCapsuleContextPrompt(
+      normalizedValue as WorkCapsuleContextPromptSource
+    );
+  }
+
   if (errors.length > 0) {
     return { ok: false, errors };
   }
 
-  return { ok: true, capsule: value as unknown as WorkCapsuleV1 };
+  return { ok: true, capsule: normalizedValue as unknown as WorkCapsuleV1 };
 }
 
 export function assertWorkCapsuleV1(value: unknown): WorkCapsuleV1 {
@@ -155,6 +172,7 @@ export function renderWorkCapsuleMarkdown(capsule: WorkCapsuleV1): string {
   const sections = [
     renderScalarSection("Title", capsule.title),
     renderScalarSection("Goal", capsule.goal),
+    renderScalarSection("Context Prompt", capsule.contextPrompt),
     renderStringListSection("Reusable Context", capsule.reusableContext),
     renderItemSection("Decisions", capsule.decisions),
     renderItemSection("Constraints", capsule.constraints),
@@ -166,6 +184,31 @@ export function renderWorkCapsuleMarkdown(capsule: WorkCapsuleV1): string {
   ];
 
   return `${sections.join("\n\n")}\n`;
+}
+
+export function buildWorkCapsuleContextPrompt(
+  capsule: WorkCapsuleContextPromptSource
+): string {
+  const lines = [
+    "Use this Work Capsule to continue the work in a new AI chat.",
+    "",
+    `Title: ${compactPromptText(capsule.title, 160)}`,
+    `Goal: ${compactPromptText(capsule.goal, 400)}`
+  ];
+
+  appendStringPromptSection(lines, "Reusable context", capsule.reusableContext);
+  appendItemPromptSection(lines, "Decisions", capsule.decisions);
+  appendItemPromptSection(lines, "Constraints", capsule.constraints);
+  appendItemPromptSection(lines, "Facts", capsule.facts);
+  appendItemPromptSection(lines, "Open questions", capsule.openQuestions);
+  appendActionPromptSection(lines, capsule.nextActions);
+  appendArtifactPromptSection(lines, capsule.artifacts);
+
+  if (capsule.sourceExcerptPolicy === "selected-excerpts") {
+    appendExcerptPromptSection(lines, capsule.excerpts);
+  }
+
+  return lines.join("\n").trim();
 }
 
 export async function createWorkCapsule(capsule: WorkCapsuleV1): Promise<WorkCapsuleV1> {
@@ -351,6 +394,73 @@ function renderSourceSection(capsule: WorkCapsuleV1): string {
 
 function renderListSection(title: string, lines: string[]): string {
   return `## ${title}\n\n${lines.length > 0 ? lines.join("\n") : "- None"}`;
+}
+
+function appendStringPromptSection(lines: string[], title: string, items: string[]): void {
+  if (items.length === 0) {
+    return;
+  }
+
+  lines.push("", `${title}:`, ...items.map((item) => `- ${compactPromptText(item)}`));
+}
+
+function appendItemPromptSection(
+  lines: string[],
+  title: string,
+  items: WorkCapsuleItem[]
+): void {
+  if (items.length === 0) {
+    return;
+  }
+
+  lines.push("", `${title}:`, ...items.map((item) => `- ${compactPromptText(item.text)}`));
+}
+
+function appendActionPromptSection(lines: string[], actions: WorkCapsuleAction[]): void {
+  if (actions.length === 0) {
+    return;
+  }
+
+  lines.push(
+    "",
+    "Next actions:",
+    ...actions.map((action) => {
+      const owner = action.owner ? ` @${action.owner}` : "";
+      return `- [${action.status}]${owner} ${compactPromptText(action.text)}`;
+    })
+  );
+}
+
+function appendArtifactPromptSection(lines: string[], artifacts: WorkCapsuleArtifact[]): void {
+  if (artifacts.length === 0) {
+    return;
+  }
+
+  lines.push(
+    "",
+    "Artifacts:",
+    ...artifacts.map((artifact) => {
+      const body = compactPromptText(artifact.body);
+      return body
+        ? `- ${compactPromptText(artifact.title, 160)} (${artifact.type}): ${body}`
+        : `- ${compactPromptText(artifact.title, 160)} (${artifact.type})`;
+    })
+  );
+}
+
+function appendExcerptPromptSection(lines: string[], excerpts: WorkCapsuleExcerpt[]): void {
+  if (excerpts.length === 0) {
+    return;
+  }
+
+  lines.push(
+    "",
+    "Selected excerpts:",
+    ...excerpts.map((excerpt) => {
+      const text = compactPromptText(excerpt.text);
+      return `- ${excerpt.turnId} (${excerpt.role}): ${text}`;
+    })
+  );
 }
 
 function validateSource(value: unknown, errors: string[]): void {
@@ -561,6 +671,15 @@ function compareIndexItems(first: WorkCapsuleIndexItem, second: WorkCapsuleIndex
 
 function compactString(value: unknown): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+}
+
+function compactPromptText(value: string, maxLength = 500): string {
+  const compacted = compactString(value);
+  if (compacted.length <= maxLength) {
+    return compacted;
+  }
+
+  return `${compacted.slice(0, Math.max(0, maxLength - 3)).trim()}...`;
 }
 
 function storageGet(storage: ChromeStorageLocal, key: string): Promise<unknown> {
