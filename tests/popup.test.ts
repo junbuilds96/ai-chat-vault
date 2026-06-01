@@ -104,6 +104,34 @@ function checkboxes(): HTMLInputElement[] {
   return Array.from(document.querySelectorAll<HTMLInputElement>("input[data-acv-message-index]"));
 }
 
+function messageRows(): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>("[data-acv-message-row-index]"));
+}
+
+function navigatorSearch(): HTMLInputElement {
+  const input = document.querySelector<HTMLInputElement>("input[data-acv-message-search]");
+  if (!input) {
+    throw new Error("Missing message search");
+  }
+  return input;
+}
+
+function navigatorRoleFilter(): HTMLSelectElement {
+  const select = document.querySelector<HTMLSelectElement>("select[data-acv-role-filter]");
+  if (!select) {
+    throw new Error("Missing role filter");
+  }
+  return select;
+}
+
+function navigatorCount(): string {
+  return document.querySelector("[data-acv-navigator-count]")?.textContent ?? "";
+}
+
+function navigatorResults(): HTMLButtonElement[] {
+  return Array.from(document.querySelectorAll<HTMLButtonElement>("button[data-acv-focus-message-index]"));
+}
+
 function preview(): string {
   const textarea = document.querySelector<HTMLTextAreaElement>("textarea[aria-label='Markdown preview']");
   return textarea?.value ?? "";
@@ -160,6 +188,78 @@ describe("toolbar popup", () => {
     expect(preview()).toContain("# Popup Test - ChatGPT");
     expect(preview()).toContain("## User\n\nQuestion one");
     expect(preview()).toContain("## Assistant\n\nAnswer two");
+  });
+
+  it("filters captured turns by role and text in the Message Navigator", async () => {
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+
+    expect(navigatorCount()).toBe("3 of 3 turns");
+    expect(navigatorResults().map((result) => result.textContent)).toEqual([
+      "1. UserQuestion one",
+      "2. AssistantAnswer two",
+      "3. UserFollow-up three"
+    ]);
+    expect(Array.from(navigatorRoleFilter().options).map((option) => option.textContent)).toEqual([
+      "All roles (3)",
+      "User (2)",
+      "Assistant (1)",
+      "System (0)"
+    ]);
+
+    navigatorRoleFilter().value = "assistant";
+    navigatorRoleFilter().dispatchEvent(new Event("change", { bubbles: true }));
+    expect(navigatorCount()).toBe("1 of 3 turns");
+    expect(navigatorResults()).toHaveLength(1);
+    expect(navigatorResults()[0].textContent).toBe("2. AssistantAnswer two");
+
+    navigatorSearch().value = "follow-up";
+    navigatorSearch().dispatchEvent(new Event("input", { bubbles: true }));
+    expect(navigatorCount()).toBe("0 of 3 turns");
+    expect(document.querySelector(".acv-navigator-empty")?.textContent).toBe("No matching turns");
+
+    navigatorRoleFilter().value = "all";
+    navigatorRoleFilter().dispatchEvent(new Event("change", { bubbles: true }));
+    expect(navigatorCount()).toBe("1 of 3 turns");
+    expect(navigatorResults()[0].textContent).toBe("3. UserFollow-up three");
+  });
+
+  it("focuses a navigator result without changing selected-message export", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+
+    button("select-none").click();
+    const firstCheckbox = checkboxes()[0];
+    firstCheckbox.checked = true;
+    firstCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+
+    navigatorSearch().value = "answer";
+    navigatorSearch().dispatchEvent(new Event("input", { bubbles: true }));
+    navigatorResults()[0].click();
+    await flushAsyncClick();
+
+    expect(messageRows()[1].classList.contains("is-focused")).toBe(true);
+    expect(messageRows()[1].getAttribute("aria-current")).toBe("true");
+    expect(messageRows()[0].classList.contains("is-focused")).toBe(false);
+    expect(status()).toBe("Focused message 2 of 3");
+
+    button("copy").click();
+    await flushAsyncClick();
+
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain("## User\n\nQuestion one");
+    expect(copied).not.toContain("Answer two");
+    expect(copied).not.toContain("Follow-up three");
   });
 
   it("copies only selected messages from the popup", async () => {

@@ -1,5 +1,5 @@
 import "./popup.css";
-import type { ConversationExport } from "./extractor";
+import type { ConversationExport, Speaker } from "./extractor";
 import { conversationToMarkdown, markdownFilename } from "./markdown";
 import {
   allMessageIndexes,
@@ -18,6 +18,8 @@ import {
 } from "./messages";
 import { loadPromptSnippets, type PromptSnippet } from "./prompts";
 
+type MessageNavigatorRole = "all" | Speaker;
+
 interface PopupState {
   conversation: ConversationExport | null;
   selectedMessageIndexes: Set<number>;
@@ -25,6 +27,9 @@ interface PopupState {
   title: string;
   snippets: PromptSnippet[];
   selectedSnippetId: string;
+  navigatorQuery: string;
+  navigatorRole: MessageNavigatorRole;
+  focusedMessageIndex: number | null;
 }
 
 const state: PopupState = {
@@ -33,7 +38,18 @@ const state: PopupState = {
   markdown: "",
   title: "ChatGPT Conversation",
   snippets: [],
-  selectedSnippetId: ""
+  selectedSnippetId: "",
+  navigatorQuery: "",
+  navigatorRole: "all",
+  focusedMessageIndex: null
+};
+
+const NAVIGATOR_ROLES: MessageNavigatorRole[] = ["all", "user", "assistant", "system"];
+const NAVIGATOR_ROLE_LABELS: Record<MessageNavigatorRole, string> = {
+  all: "All roles",
+  user: "User",
+  assistant: "Assistant",
+  system: "System"
 };
 
 initPopup();
@@ -70,6 +86,17 @@ function initPopup(): void {
         </div>
       </section>
       <section class="acv-message-panel" hidden>
+        <section class="acv-message-navigator" aria-label="Message Navigator">
+          <div class="acv-section-heading">
+            <strong>Message Navigator</strong>
+            <span data-acv-navigator-count>0 of 0 turns</span>
+          </div>
+          <div class="acv-navigator-filters">
+            <input type="search" aria-label="Search captured messages" data-acv-message-search placeholder="Search role or text" />
+            <select aria-label="Filter messages by role" data-acv-role-filter></select>
+          </div>
+          <div class="acv-navigator-results" aria-label="Message Navigator results"></div>
+        </section>
         <div class="acv-selection-actions" aria-label="Message selection controls">
           <button type="button" data-acv-action="select-all">Select all</button>
           <button type="button" data-acv-action="select-none">Select none</button>
@@ -82,6 +109,7 @@ function initPopup(): void {
   `;
 
   root.addEventListener("click", handlePopupClick);
+  root.addEventListener("input", handlePopupInput);
   root.addEventListener("change", handlePopupChange);
   void loadPromptLibrary();
 }
@@ -114,6 +142,14 @@ async function handlePopupClick(event: MouseEvent): Promise<void> {
       return;
     }
 
+    if (action === "focus-message") {
+      const messageIndex = Number(button.dataset.acvFocusMessageIndex);
+      if (Number.isInteger(messageIndex)) {
+        focusMessage(messageIndex);
+      }
+      return;
+    }
+
     if (!state.conversation) {
       await captureFromActiveTab();
     }
@@ -131,6 +167,18 @@ async function handlePopupClick(event: MouseEvent): Promise<void> {
   }
 }
 
+function handlePopupInput(event: Event): void {
+  const input = (event.target as HTMLElement).closest<HTMLInputElement>(
+    "input[data-acv-message-search]"
+  );
+  if (!input) {
+    return;
+  }
+
+  state.navigatorQuery = input.value;
+  renderMessageNavigator();
+}
+
 function handlePopupChange(event: Event): void {
   const select = (event.target as HTMLElement).closest<HTMLSelectElement>(
     "select[data-acv-prompt-select]"
@@ -138,6 +186,15 @@ function handlePopupChange(event: Event): void {
   if (select) {
     state.selectedSnippetId = select.value;
     renderPromptPreview();
+    return;
+  }
+
+  const roleFilter = (event.target as HTMLElement).closest<HTMLSelectElement>(
+    "select[data-acv-role-filter]"
+  );
+  if (roleFilter) {
+    state.navigatorRole = navigatorRoleFromValue(roleFilter.value);
+    renderMessageNavigator();
     return;
   }
 
@@ -285,8 +342,12 @@ function updateCapturedConversation(conversation: ConversationExport): void {
   state.selectedMessageIndexes = allMessageIndexes(conversation.messages.length);
   state.title = conversation.title;
   state.markdown = conversationToMarkdown(conversation);
+  state.navigatorQuery = "";
+  state.navigatorRole = "all";
+  state.focusedMessageIndex = null;
   preview().value = state.markdown;
   renderMessageList(conversation.messages);
+  renderMessageNavigator();
   setStatus(`Captured ${conversation.messages.length} message${conversation.messages.length === 1 ? "" : "s"}`);
 }
 
@@ -407,6 +468,8 @@ function renderMessageList(messages: ConversationExport["messages"]): void {
   messages.forEach((message, index) => {
     const label = document.createElement("label");
     label.className = "acv-message-row";
+    label.dataset.acvMessageRowIndex = String(index);
+    label.tabIndex = -1;
 
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
@@ -426,6 +489,8 @@ function renderMessageList(messages: ConversationExport["messages"]): void {
     label.append(checkbox, details);
     list.append(label);
   });
+
+  syncFocusedMessage();
 }
 
 function syncMessageCheckboxes(): void {
@@ -434,6 +499,156 @@ function syncMessageCheckboxes(): void {
     .forEach((checkbox) => {
       checkbox.checked = state.selectedMessageIndexes.has(Number(checkbox.dataset.acvMessageIndex));
     });
+}
+
+function renderMessageNavigator(): void {
+  const conversation = state.conversation;
+  const count = navigatorCount();
+  const results = navigatorResults();
+  const search = navigatorSearch();
+  const roleFilter = navigatorRoleFilter();
+
+  search.value = state.navigatorQuery;
+  renderNavigatorRoleOptions(roleFilter);
+  results.textContent = "";
+
+  if (!conversation) {
+    count.textContent = "0 of 0 turns";
+    return;
+  }
+
+  const resultIndexes = filteredNavigatorMessageIndexes(conversation);
+  count.textContent = `${resultIndexes.length} of ${conversation.messages.length} turns`;
+
+  if (resultIndexes.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "acv-navigator-empty";
+    empty.textContent = "No matching turns";
+    results.append(empty);
+    syncFocusedMessage();
+    return;
+  }
+
+  resultIndexes.forEach((messageIndex) => {
+    const message = conversation.messages[messageIndex];
+    const result = document.createElement("button");
+    result.type = "button";
+    result.className = "acv-navigator-result";
+    result.dataset.acvAction = "focus-message";
+    result.dataset.acvFocusMessageIndex = String(messageIndex);
+
+    const title = document.createElement("strong");
+    title.textContent = `${messageIndex + 1}. ${NAVIGATOR_ROLE_LABELS[message.speaker]}`;
+
+    const previewText = document.createElement("span");
+    previewText.textContent = shortMessagePreview(message, 72);
+
+    result.append(title, previewText);
+    results.append(result);
+  });
+
+  syncFocusedMessage();
+}
+
+function renderNavigatorRoleOptions(select: HTMLSelectElement): void {
+  if (!state.conversation) {
+    select.textContent = "";
+    return;
+  }
+
+  const counts = messageCountsByRole(state.conversation);
+  select.textContent = "";
+
+  NAVIGATOR_ROLES.forEach((role) => {
+    const option = document.createElement("option");
+    option.value = role;
+    option.textContent = `${NAVIGATOR_ROLE_LABELS[role]} (${counts[role]})`;
+    select.append(option);
+  });
+
+  select.value = state.navigatorRole;
+}
+
+function filteredNavigatorMessageIndexes(conversation: ConversationExport): number[] {
+  const query = normalizeNavigatorQuery(state.navigatorQuery);
+  const role = state.navigatorRole;
+
+  return conversation.messages.flatMap((message, index) => {
+    if (role !== "all" && message.speaker !== role) {
+      return [];
+    }
+
+    const searchableText = `${message.speaker} ${message.text}`.toLowerCase();
+    if (query && !searchableText.includes(query)) {
+      return [];
+    }
+
+    return [index];
+  });
+}
+
+function messageCountsByRole(conversation: ConversationExport): Record<MessageNavigatorRole, number> {
+  const counts: Record<MessageNavigatorRole, number> = {
+    all: conversation.messages.length,
+    user: 0,
+    assistant: 0,
+    system: 0
+  };
+
+  conversation.messages.forEach((message) => {
+    counts[message.speaker] += 1;
+  });
+
+  return counts;
+}
+
+function focusMessage(messageIndex: number): void {
+  if (!state.conversation || messageIndex < 0 || messageIndex >= state.conversation.messages.length) {
+    return;
+  }
+
+  state.focusedMessageIndex = messageIndex;
+  syncFocusedMessage();
+
+  const row = messageRow(messageIndex);
+  if (typeof row?.scrollIntoView === "function") {
+    row.scrollIntoView({ block: "nearest" });
+  }
+  row?.focus({ preventScroll: true });
+  setStatus(`Focused message ${messageIndex + 1} of ${state.conversation.messages.length}`);
+}
+
+function syncFocusedMessage(): void {
+  document
+    .querySelectorAll<HTMLElement>("[data-acv-message-row-index]")
+    .forEach((row) => {
+      const isFocused = Number(row.dataset.acvMessageRowIndex) === state.focusedMessageIndex;
+      row.classList.toggle("is-focused", isFocused);
+      if (isFocused) {
+        row.setAttribute("aria-current", "true");
+      } else {
+        row.removeAttribute("aria-current");
+      }
+    });
+
+  document
+    .querySelectorAll<HTMLButtonElement>("button[data-acv-focus-message-index]")
+    .forEach((button) => {
+      button.classList.toggle(
+        "is-focused",
+        Number(button.dataset.acvFocusMessageIndex) === state.focusedMessageIndex
+      );
+    });
+}
+
+function normalizeNavigatorQuery(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function navigatorRoleFromValue(value: string): MessageNavigatorRole {
+  return NAVIGATOR_ROLES.includes(value as MessageNavigatorRole)
+    ? (value as MessageNavigatorRole)
+    : "all";
 }
 
 function renderPromptLibrary(): void {
@@ -506,6 +721,42 @@ function messageList(): HTMLDivElement {
     throw new Error("Message selection panel is unavailable");
   }
   return list;
+}
+
+function navigatorSearch(): HTMLInputElement {
+  const input = document.querySelector<HTMLInputElement>("input[data-acv-message-search]");
+  if (!input) {
+    throw new Error("Message search is unavailable");
+  }
+  return input;
+}
+
+function navigatorRoleFilter(): HTMLSelectElement {
+  const select = document.querySelector<HTMLSelectElement>("select[data-acv-role-filter]");
+  if (!select) {
+    throw new Error("Message role filter is unavailable");
+  }
+  return select;
+}
+
+function navigatorCount(): HTMLSpanElement {
+  const count = document.querySelector<HTMLSpanElement>("[data-acv-navigator-count]");
+  if (!count) {
+    throw new Error("Message navigator count is unavailable");
+  }
+  return count;
+}
+
+function navigatorResults(): HTMLDivElement {
+  const results = document.querySelector<HTMLDivElement>(".acv-navigator-results");
+  if (!results) {
+    throw new Error("Message navigator results are unavailable");
+  }
+  return results;
+}
+
+function messageRow(messageIndex: number): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[data-acv-message-row-index="${messageIndex}"]`);
 }
 
 function setStatus(message: string): void {
