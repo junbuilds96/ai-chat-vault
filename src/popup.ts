@@ -29,19 +29,24 @@ import {
   type PromptSnippet
 } from "./prompts";
 import {
+  DEFAULT_WORK_CAPSULE_OUTPUT_PRESET_ID,
+  WORK_CAPSULE_OUTPUT_PRESETS,
   WORK_CAPSULE_SCHEMA_VERSION,
   buildWorkCapsuleContextPrompt,
   createWorkCapsule,
   deleteWorkCapsule,
   findMostRecentWorkCapsuleBySourceUrl,
   getWorkCapsule,
+  isWorkCapsuleOutputPresetId,
   listWorkCapsules,
   renderWorkCapsuleMarkdown,
+  renderWorkCapsuleOutputPreset,
   type WorkCapsuleAction,
   type WorkCapsuleArtifact,
   type WorkCapsuleContextPromptSource,
   type WorkCapsuleIndexItem,
   type WorkCapsuleItem,
+  type WorkCapsuleOutputPresetId,
   type WorkCapsuleV1
 } from "./workCapsules";
 
@@ -63,6 +68,7 @@ interface PopupState {
   recentWorkCapsule: WorkCapsuleV1 | null;
   workCapsuleLibrary: WorkCapsuleIndexItem[];
   workCapsuleDraft: WorkCapsuleV1 | null;
+  workCapsuleOutputPresetId: WorkCapsuleOutputPresetId;
   workCapsuleContextPromptEdited: boolean;
 }
 
@@ -82,6 +88,7 @@ const state: PopupState = {
   recentWorkCapsule: null,
   workCapsuleLibrary: [],
   workCapsuleDraft: null,
+  workCapsuleOutputPresetId: DEFAULT_WORK_CAPSULE_OUTPUT_PRESET_ID,
   workCapsuleContextPromptEdited: false
 };
 
@@ -153,6 +160,10 @@ function initPopup(): void {
           <strong>Work Capsule</strong>
           <span data-acv-work-capsule-context>Local draft</span>
         </div>
+        <label class="acv-work-capsule-preset">
+          <span>Bridge preset</span>
+          <select data-acv-capsule-preset aria-label="Work capsule bridge preset"></select>
+        </label>
         <button type="button" data-acv-action="create-capsule">Create Capsule</button>
         <div class="acv-work-capsule-recent" hidden></div>
         <div class="acv-work-capsule-library" aria-label="Work Capsule Library" hidden></div>
@@ -440,23 +451,34 @@ function handlePopupChange(event: Event): void {
   const checkbox = (event.target as HTMLElement).closest<HTMLInputElement>(
     "input[data-acv-message-index]"
   );
-  if (!checkbox) {
+  if (checkbox) {
+    const messageIndex = Number(checkbox.dataset.acvMessageIndex);
+    if (!Number.isInteger(messageIndex)) {
+      return;
+    }
+
+    if (checkbox.checked) {
+      state.selectedMessageIndexes.add(messageIndex);
+    } else {
+      state.selectedMessageIndexes.delete(messageIndex);
+    }
+
+    updatePreviewFromSelection();
+    renderWorkCapsuleSection();
     return;
   }
 
-  const messageIndex = Number(checkbox.dataset.acvMessageIndex);
-  if (!Number.isInteger(messageIndex)) {
+  const presetSelect = (event.target as HTMLElement).closest<HTMLSelectElement>(
+    "select[data-acv-capsule-preset]"
+  );
+  if (!presetSelect) {
     return;
   }
 
-  if (checkbox.checked) {
-    state.selectedMessageIndexes.add(messageIndex);
-  } else {
-    state.selectedMessageIndexes.delete(messageIndex);
+  if (isWorkCapsuleOutputPresetId(presetSelect.value)) {
+    state.workCapsuleOutputPresetId = presetSelect.value;
+    setStatus(`Selected ${selectedWorkCapsuleOutputPresetName()}`);
   }
-
-  updatePreviewFromSelection();
-  renderWorkCapsuleSection();
 }
 
 async function loadPromptLibrary(): Promise<void> {
@@ -1128,14 +1150,14 @@ async function deleteCurrentWorkCapsule(): Promise<void> {
 
 async function copyCurrentWorkCapsuleContext(): Promise<void> {
   const capsule = currentWorkCapsuleDraft();
-  await navigator.clipboard.writeText(capsule.contextPrompt);
-  setStatus("Copied capsule context to clipboard");
+  await navigator.clipboard.writeText(selectedWorkCapsuleOutput(capsule));
+  setStatus(`Copied ${selectedWorkCapsuleOutputPresetName()} to clipboard`);
 }
 
 async function copyWorkCapsuleContextById(id: string): Promise<void> {
   const capsule = await savedWorkCapsuleById(id);
-  await navigator.clipboard.writeText(capsule.contextPrompt);
-  setStatus("Copied capsule context to clipboard");
+  await navigator.clipboard.writeText(selectedWorkCapsuleOutput(capsule));
+  setStatus(`Copied ${selectedWorkCapsuleOutputPresetName()} to clipboard`);
 }
 
 async function savedWorkCapsuleById(id: string): Promise<WorkCapsuleV1> {
@@ -1226,6 +1248,7 @@ function renderWorkCapsuleSection(): void {
   recent.textContent = "";
   library.textContent = "";
   deleteButton.hidden = !draft || state.recentWorkCapsule?.id !== draft.id;
+  renderWorkCapsulePresetOptions(workCapsulePresetSelect());
 
   if (!state.conversation) {
     context.textContent = "Local draft";
@@ -1265,6 +1288,29 @@ function renderWorkCapsuleSection(): void {
     "artifacts",
     draft.artifacts.map(artifactMarkdownInput).join("\n\n")
   );
+}
+
+function selectedWorkCapsuleOutput(capsule: WorkCapsuleV1): string {
+  return renderWorkCapsuleOutputPreset(capsule, state.workCapsuleOutputPresetId);
+}
+
+function selectedWorkCapsuleOutputPresetName(): string {
+  return WORK_CAPSULE_OUTPUT_PRESETS.find(
+    (preset) => preset.id === state.workCapsuleOutputPresetId
+  )?.name ?? "Work Capsule context";
+}
+
+function renderWorkCapsulePresetOptions(select: HTMLSelectElement): void {
+  select.textContent = "";
+
+  WORK_CAPSULE_OUTPUT_PRESETS.forEach((preset) => {
+    const option = document.createElement("option");
+    option.value = preset.id;
+    option.textContent = preset.name;
+    select.append(option);
+  });
+
+  select.value = state.workCapsuleOutputPresetId;
 }
 
 function renderRecentWorkCapsule(capsule: WorkCapsuleV1, container: HTMLDivElement): void {
@@ -1776,6 +1822,15 @@ function workCapsuleLibrary(): HTMLDivElement {
   }
 
   return library;
+}
+
+function workCapsulePresetSelect(): HTMLSelectElement {
+  const select = document.querySelector<HTMLSelectElement>("select[data-acv-capsule-preset]");
+  if (!select) {
+    throw new Error("Work capsule preset selector is unavailable");
+  }
+
+  return select;
 }
 
 function workCapsuleContext(): HTMLSpanElement {

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  DEFAULT_WORK_CAPSULE_OUTPUT_PRESET_ID,
+  WORK_CAPSULE_OUTPUT_PRESETS,
   WORK_CAPSULE_INDEX_KEY,
   WORK_CAPSULE_SCHEMA_VERSION,
   type WorkCapsuleV1,
@@ -7,11 +9,14 @@ import {
   deleteWorkCapsule,
   findMostRecentWorkCapsuleBySourceUrl,
   getWorkCapsule,
+  isWorkCapsuleOutputPresetId,
   listWorkCapsules,
   renderWorkCapsuleMarkdown,
+  renderWorkCapsuleOutputPreset,
   updateWorkCapsule,
   validateWorkCapsuleV1,
   workCapsuleBodyKey,
+  workCapsuleOutputPresetName,
   workCapsuleSourceIdentity
 } from "../src/workCapsules";
 
@@ -287,6 +292,214 @@ Client Launch
         })
       )
     ).not.toContain("Selected excerpts");
+  });
+});
+
+describe("work capsule output presets", () => {
+  it("exposes stable typed preset ids and names", () => {
+    expect(DEFAULT_WORK_CAPSULE_OUTPUT_PRESET_ID).toBe("generic-ai-context");
+    expect(WORK_CAPSULE_OUTPUT_PRESETS).toEqual([
+      { id: "markdown", name: "Plain Markdown" },
+      { id: "generic-ai-context", name: "Generic AI context" },
+      { id: "chatgpt-project-context", name: "ChatGPT Project-style context" },
+      { id: "claude-project-context", name: "Claude Project-style context" }
+    ]);
+    expect(isWorkCapsuleOutputPresetId("claude-project-context")).toBe(true);
+    expect(isWorkCapsuleOutputPresetId("remote-provider")).toBe(false);
+    expect(workCapsuleOutputPresetName("chatgpt-project-context")).toBe(
+      "ChatGPT Project-style context"
+    );
+  });
+
+  it("renders the plain Markdown preset as the existing Markdown output", () => {
+    expect(renderWorkCapsuleOutputPreset(capsule(), "markdown")).toBe(
+      renderWorkCapsuleMarkdown(capsule())
+    );
+  });
+
+  it("renders deterministic generic AI context", () => {
+    expect(renderWorkCapsuleOutputPreset(capsule(), "generic-ai-context")).toBe(`# Generic AI Context
+
+## How To Use
+
+Continue this work from the local Work Capsule below. Use it as user-provided context, preserve the constraints, and ask before inventing missing facts.
+
+## Title
+
+Launch Plan
+
+## Goal
+
+Ship the first local-only work capsule.
+
+## Context Prompt
+
+Continue the launch plan using only local-first Work Capsule context.
+
+## Reusable Context
+
+- Use Chrome local storage only.
+
+## Decisions
+
+- Keep Week 1 UI out of scope.
+
+## Constraints
+
+- Do not call network APIs.
+
+## Facts
+
+- The extension already captures ChatGPT turns.
+
+## Open Questions
+
+- Which popup affordance creates capsules later?
+
+## Next Actions
+
+- [todo] @user Wire this into the popup flow.
+
+## Artifacts
+
+- Capsule schema (spec)
+  Stable enough for Week 1 storage tests.
+
+## Source
+
+- Title: ChatGPT planning chat
+- URL: https://chatgpt.com/c/local-planning
+- Selected turn IDs: turn-1, turn-2
+- Selected excerpts:
+  - turn-1 (user): Create a local schema.
+  - turn-2 (assistant): Keep storage local-only.
+`);
+  });
+
+  it("renders deterministic ChatGPT Project-style context", () => {
+    const rendered = renderWorkCapsuleOutputPreset(
+      capsule({ project: "Client Launch" }),
+      "chatgpt-project-context"
+    );
+
+    expect(rendered).toBe(`# ChatGPT Project-Style Context
+
+## How To Use
+
+Paste this locally generated Work Capsule into a ChatGPT Project as project context or instructions. It does not update any project automatically.
+
+## Project Name
+
+Client Launch
+
+## Project Goal
+
+Ship the first local-only work capsule.
+
+## Carry-Forward Instructions
+
+Continue the launch plan using only local-first Work Capsule context.
+
+## Reusable Context
+
+- Use Chrome local storage only.
+
+## Decisions To Preserve
+
+- Keep Week 1 UI out of scope.
+
+## Constraints To Follow
+
+- Do not call network APIs.
+
+## Facts To Remember
+
+- The extension already captures ChatGPT turns.
+
+## Open Questions
+
+- Which popup affordance creates capsules later?
+
+## Next Actions
+
+- [todo] @user Wire this into the popup flow.
+
+## Artifacts To Keep Available
+
+- Capsule schema (spec)
+  Stable enough for Week 1 storage tests.
+
+## Source Trace
+
+- Title: ChatGPT planning chat
+- URL: https://chatgpt.com/c/local-planning
+- Selected turn IDs: turn-1, turn-2
+- Selected excerpts:
+  - turn-1 (user): Create a local schema.
+  - turn-2 (assistant): Keep storage local-only.
+`);
+  });
+
+  it("renders deterministic Claude Project-style context", () => {
+    const rendered = renderWorkCapsuleOutputPreset(
+      capsule({ project: "Client Launch" }),
+      "claude-project-context"
+    );
+
+    expect(rendered).toBe(`# Claude Project-Style Context
+
+## How To Use
+
+Paste this locally generated Work Capsule into Claude Project knowledge. It does not connect to Claude or update any project automatically.
+
+## Project Knowledge Summary
+
+- Title: Launch Plan
+- Project: Client Launch
+- Goal: Ship the first local-only work capsule.
+
+## Instructions For Claude
+
+Continue the launch plan using only local-first Work Capsule context.
+
+## Reusable Knowledge
+
+- Use Chrome local storage only.
+
+## Decisions
+
+- Keep Week 1 UI out of scope.
+
+## Constraints
+
+- Do not call network APIs.
+
+## Facts
+
+- The extension already captures ChatGPT turns.
+
+## Open Questions
+
+- Which popup affordance creates capsules later?
+
+## Next Actions
+
+- [todo] @user Wire this into the popup flow.
+
+## Artifacts
+
+- Capsule schema (spec)
+  Stable enough for Week 1 storage tests.
+
+## Source Trace
+
+- Title: ChatGPT planning chat
+- URL: https://chatgpt.com/c/local-planning
+- Selected turn IDs: turn-1, turn-2
+- Selected excerpts:
+  - turn-1 (user): Create a local schema.
+  - turn-2 (assistant): Keep storage local-only.
+`);
   });
 });
 

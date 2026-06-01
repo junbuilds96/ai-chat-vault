@@ -1,9 +1,19 @@
 export const WORK_CAPSULE_SCHEMA_VERSION = "work-capsule/v1";
 export const WORK_CAPSULE_INDEX_KEY = "workCapsules:v1";
+export const WORK_CAPSULE_OUTPUT_PRESETS = [
+  { id: "markdown", name: "Plain Markdown" },
+  { id: "generic-ai-context", name: "Generic AI context" },
+  { id: "chatgpt-project-context", name: "ChatGPT Project-style context" },
+  { id: "claude-project-context", name: "Claude Project-style context" }
+] as const;
+export const DEFAULT_WORK_CAPSULE_OUTPUT_PRESET_ID = "generic-ai-context";
 
 export type WorkCapsuleSourceProvider = "chatgpt";
 export type WorkCapsuleActionStatus = "todo" | "doing" | "done";
 export type WorkCapsuleActionOwner = "user" | "ai" | "unknown";
+export type WorkCapsuleOutputPreset = (typeof WORK_CAPSULE_OUTPUT_PRESETS)[number];
+export type WorkCapsuleOutputPresetId = WorkCapsuleOutputPreset["id"];
+export type WorkCapsuleOutputPresetName = WorkCapsuleOutputPreset["name"];
 export type WorkCapsuleArtifactType =
   | "spec"
   | "prompt"
@@ -108,6 +118,15 @@ const EXCERPT_ROLES = new Set<WorkCapsuleExcerptRole>([
   "system",
   "unknown"
 ]);
+const WORK_CAPSULE_OUTPUT_PRESET_NAME_BY_ID: Record<
+  WorkCapsuleOutputPresetId,
+  WorkCapsuleOutputPresetName
+> = {
+  markdown: "Plain Markdown",
+  "generic-ai-context": "Generic AI context",
+  "chatgpt-project-context": "ChatGPT Project-style context",
+  "claude-project-context": "Claude Project-style context"
+};
 
 export function workCapsuleBodyKey(id: string): string {
   return `workCapsule:v1:${id}`;
@@ -188,6 +207,36 @@ export function renderWorkCapsuleMarkdown(capsule: WorkCapsuleV1): string {
   ];
 
   return `${sections.join("\n\n")}\n`;
+}
+
+export function renderWorkCapsuleOutputPreset(
+  capsule: WorkCapsuleV1,
+  presetId: WorkCapsuleOutputPresetId
+): string {
+  switch (presetId) {
+    case "markdown":
+      return renderWorkCapsuleMarkdown(capsule);
+    case "generic-ai-context":
+      return renderGenericAiContext(capsule);
+    case "chatgpt-project-context":
+      return renderChatGptProjectContext(capsule);
+    case "claude-project-context":
+      return renderClaudeProjectContext(capsule);
+    default: {
+      const exhaustive: never = presetId;
+      return exhaustive;
+    }
+  }
+}
+
+export function isWorkCapsuleOutputPresetId(value: string): value is WorkCapsuleOutputPresetId {
+  return WORK_CAPSULE_OUTPUT_PRESETS.some((preset) => preset.id === value);
+}
+
+export function workCapsuleOutputPresetName(
+  presetId: WorkCapsuleOutputPresetId
+): WorkCapsuleOutputPresetName {
+  return WORK_CAPSULE_OUTPUT_PRESET_NAME_BY_ID[presetId];
 }
 
 export function buildWorkCapsuleContextPrompt(
@@ -382,7 +431,7 @@ function renderArtifactSection(title: string, artifacts: WorkCapsuleArtifact[]):
   );
 }
 
-function renderSourceSection(capsule: WorkCapsuleV1): string {
+function renderSourceSection(capsule: WorkCapsuleV1, title = "Source"): string {
   const lines = [
     `- Title: ${capsule.source.title}`,
     `- URL: ${capsule.source.url}`,
@@ -403,7 +452,86 @@ function renderSourceSection(capsule: WorkCapsuleV1): string {
     }
   }
 
-  return `## Source\n\n${lines.join("\n")}`;
+  return `## ${title}\n\n${lines.join("\n")}`;
+}
+
+function renderGenericAiContext(capsule: WorkCapsuleV1): string {
+  return renderBridgeDocument("Generic AI Context", [
+    renderScalarSection(
+      "How To Use",
+      "Continue this work from the local Work Capsule below. Use it as user-provided context, preserve the constraints, and ask before inventing missing facts."
+    ),
+    renderScalarSection("Title", capsule.title),
+    ...renderOptionalScalarSections("Project", capsule.project),
+    renderScalarSection("Goal", capsule.goal),
+    renderScalarSection("Context Prompt", capsule.contextPrompt),
+    renderStringListSection("Reusable Context", capsule.reusableContext),
+    renderItemSection("Decisions", capsule.decisions),
+    renderItemSection("Constraints", capsule.constraints),
+    renderItemSection("Facts", capsule.facts),
+    renderItemSection("Open Questions", capsule.openQuestions),
+    renderActionSection("Next Actions", capsule.nextActions),
+    renderArtifactSection("Artifacts", capsule.artifacts),
+    renderSourceSection(capsule)
+  ]);
+}
+
+function renderChatGptProjectContext(capsule: WorkCapsuleV1): string {
+  return renderBridgeDocument("ChatGPT Project-Style Context", [
+    renderScalarSection(
+      "How To Use",
+      "Paste this locally generated Work Capsule into a ChatGPT Project as project context or instructions. It does not update any project automatically."
+    ),
+    renderScalarSection("Project Name", capsule.project ?? capsule.title),
+    renderScalarSection("Project Goal", capsule.goal),
+    renderScalarSection("Carry-Forward Instructions", capsule.contextPrompt),
+    renderStringListSection("Reusable Context", capsule.reusableContext),
+    renderItemSection("Decisions To Preserve", capsule.decisions),
+    renderItemSection("Constraints To Follow", capsule.constraints),
+    renderItemSection("Facts To Remember", capsule.facts),
+    renderItemSection("Open Questions", capsule.openQuestions),
+    renderActionSection("Next Actions", capsule.nextActions),
+    renderArtifactSection("Artifacts To Keep Available", capsule.artifacts),
+    renderSourceSection(capsule, "Source Trace")
+  ]);
+}
+
+function renderClaudeProjectContext(capsule: WorkCapsuleV1): string {
+  return renderBridgeDocument("Claude Project-Style Context", [
+    renderScalarSection(
+      "How To Use",
+      "Paste this locally generated Work Capsule into Claude Project knowledge. It does not connect to Claude or update any project automatically."
+    ),
+    renderSummarySection(capsule),
+    renderScalarSection("Instructions For Claude", capsule.contextPrompt),
+    renderStringListSection("Reusable Knowledge", capsule.reusableContext),
+    renderItemSection("Decisions", capsule.decisions),
+    renderItemSection("Constraints", capsule.constraints),
+    renderItemSection("Facts", capsule.facts),
+    renderItemSection("Open Questions", capsule.openQuestions),
+    renderActionSection("Next Actions", capsule.nextActions),
+    renderArtifactSection("Artifacts", capsule.artifacts),
+    renderSourceSection(capsule, "Source Trace")
+  ]);
+}
+
+function renderBridgeDocument(title: string, sections: string[]): string {
+  return `# ${title}\n\n${sections.join("\n\n")}\n`;
+}
+
+function renderSummarySection(capsule: WorkCapsuleV1): string {
+  const lines = [
+    `- Title: ${capsule.title}`,
+    ...renderOptionalListLines("Project", capsule.project),
+    `- Goal: ${compactString(capsule.goal)}`
+  ];
+
+  return `## Project Knowledge Summary\n\n${lines.join("\n")}`;
+}
+
+function renderOptionalListLines(label: string, value: string | undefined): string[] {
+  const compacted = compactString(value);
+  return compacted ? [`- ${label}: ${compacted}`] : [];
 }
 
 function renderListSection(title: string, lines: string[]): string {

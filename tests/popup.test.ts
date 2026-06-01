@@ -270,6 +270,14 @@ function workCapsuleLibrary(): HTMLElement {
   return library;
 }
 
+function workCapsulePresetSelect(): HTMLSelectElement {
+  const select = document.querySelector<HTMLSelectElement>("select[data-acv-capsule-preset]");
+  if (!select) {
+    throw new Error("Missing work capsule preset selector");
+  }
+  return select;
+}
+
 function libraryRows(): HTMLElement[] {
   return Array.from(document.querySelectorAll<HTMLElement>(".acv-work-capsule-library-row"));
 }
@@ -642,6 +650,13 @@ describe("toolbar popup", () => {
 
     expect(workCapsuleSection().hidden).toBe(false);
     expect(workCapsuleFields().hidden).toBe(false);
+    expect(Array.from(workCapsulePresetSelect().options).map((option) => option.textContent)).toEqual([
+      "Plain Markdown",
+      "Generic AI context",
+      "ChatGPT Project-style context",
+      "Claude Project-style context"
+    ]);
+    expect(workCapsulePresetSelect().value).toBe("generic-ai-context");
     expect(capsuleField("title").value).toBe("Popup Test - ChatGPT");
     expect(capsuleField("project").value).toBe("");
     expect(capsuleField("goal").value).toBe(
@@ -1001,11 +1016,27 @@ describe("toolbar popup", () => {
     libraryButtons("copy-library-capsule-context")[0].click();
     await flushAsyncClick();
 
-    expect(writeText).toHaveBeenCalledWith(
-      "Use this saved context outside the original conversation."
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain("# Generic AI Context");
+    expect(copied).toContain(
+      "## Context Prompt\n\nUse this saved context outside the original conversation."
     );
+    expect(copied).toContain("## Source");
     expect(workCapsuleFields().hidden).toBe(true);
-    expect(status()).toBe("Copied capsule context to clipboard");
+    expect(status()).toBe("Copied Generic AI context to clipboard");
+
+    workCapsulePresetSelect().value = "claude-project-context";
+    workCapsulePresetSelect().dispatchEvent(new Event("change", { bubbles: true }));
+    libraryButtons("copy-library-capsule-context")[0].click();
+    await flushAsyncClick();
+
+    const claudeCopied = writeText.mock.calls[1][0] as string;
+    expect(claudeCopied).toContain("# Claude Project-Style Context");
+    expect(claudeCopied).toContain(
+      "## Instructions For Claude\n\nUse this saved context outside the original conversation."
+    );
+    expect(claudeCopied).toContain("## Source Trace");
+    expect(status()).toBe("Copied Claude Project-style context to clipboard");
   });
 
   it("handles stale or invalid Work Capsule Library bodies without opening the editor", async () => {
@@ -1262,19 +1293,36 @@ describe("toolbar popup", () => {
 
     button("copy-capsule-context").click();
     await flushAsyncClick();
-    expect(writeText.mock.calls[0][0]).toBe("Paste this exact context prompt into a new chat.");
-    expect(status()).toBe("Copied capsule context to clipboard");
+    expect(writeText.mock.calls[0][0]).toContain("# Generic AI Context");
+    expect(writeText.mock.calls[0][0]).toContain(
+      "## Context Prompt\n\nPaste this exact context prompt into a new chat."
+    );
+    expect(writeText.mock.calls[0][0]).toContain("## Source");
+    expect(status()).toBe("Copied Generic AI context to clipboard");
+
+    workCapsulePresetSelect().value = "chatgpt-project-context";
+    workCapsulePresetSelect().dispatchEvent(new Event("change", { bubbles: true }));
+    expect(status()).toBe("Selected ChatGPT Project-style context");
+
+    button("copy-capsule-context").click();
+    await flushAsyncClick();
+    expect(writeText.mock.calls[1][0]).toContain("# ChatGPT Project-Style Context");
+    expect(writeText.mock.calls[1][0]).toContain(
+      "## Carry-Forward Instructions\n\nPaste this exact context prompt into a new chat."
+    );
+    expect(writeText.mock.calls[1][0]).toContain("## Source Trace");
+    expect(status()).toBe("Copied ChatGPT Project-style context to clipboard");
 
     button("copy-capsule-markdown").click();
     await flushAsyncClick();
-    expect(writeText.mock.calls[1][0]).toContain(
+    expect(writeText.mock.calls[2][0]).toContain(
       "## Context Prompt\n\nPaste this exact context prompt into a new chat."
     );
-    expect(writeText.mock.calls[1][0]).toContain("## Source");
-    expect(writeText.mock.calls[1][0]).toContain(
+    expect(writeText.mock.calls[2][0]).toContain("## Source");
+    expect(writeText.mock.calls[2][0]).toContain(
       "- Selected turn IDs: message-1, message-2, message-3"
     );
-    expect(writeText.mock.calls[1][0]).toContain(
+    expect(writeText.mock.calls[2][0]).toContain(
       "- message-3 (user): Follow-up three"
     );
     expect(status()).toBe("Copied capsule Markdown to clipboard");

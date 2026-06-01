@@ -470,13 +470,28 @@ textarea {
   gap: 4px;
 }
 
+.acv-work-capsule-preset {
+  display: grid;
+  gap: 4px;
+}
+
 .acv-work-capsule-fields label span {
   color: #334155;
   font-size: 11px;
   font-weight: 650;
 }
 
+.acv-work-capsule-preset span {
+  color: #334155;
+  font-size: 11px;
+  font-weight: 650;
+}
+
 .acv-work-capsule-fields input {
+  margin: 0;
+}
+
+.acv-work-capsule-preset select {
   margin: 0;
 }
 
