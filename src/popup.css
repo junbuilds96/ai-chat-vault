@@ -38,6 +38,40 @@ body {
   padding: 10px 12px;
 }
 
+.acv-prompt-library {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px 10px;
+}
+
+.acv-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.acv-section-heading strong {
+  color: #111827;
+  font-size: 12px;
+}
+
+.acv-section-heading span {
+  color: #697586;
+  font-size: 11px;
+}
+
+select {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 8px;
+  color: #111827;
+  background: #ffffff;
+  border: 1px solid #d7dde5;
+  border-radius: 6px;
+  font: inherit;
+}
+
 button {
   min-height: 32px;
   color: #ffffff;
@@ -55,9 +89,16 @@ button:hover {
 
 button:focus-visible,
 input:focus-visible,
+select:focus-visible,
 textarea:focus-visible {
   outline: 2px solid #f97316;
   outline-offset: 2px;
+}
+
+.acv-prompt-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  gap: 8px;
 }
 
 .acv-message-panel {
@@ -141,8 +182,6 @@ textarea:focus-visible {
 textarea {
   display: block;
   width: calc(100% - 24px);
-  min-height: 180px;
-  max-height: 300px;
   margin: 0 12px;
   padding: 10px;
   resize: vertical;
@@ -151,6 +190,18 @@ textarea {
   border: 1px solid #d7dde5;
   border-radius: 6px;
   font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.acv-prompt-library textarea {
+  width: 100%;
+  min-height: 72px;
+  max-height: 120px;
+  margin: 0;
+}
+
+.acv-markdown-preview {
+  min-height: 180px;
+  max-height: 300px;
 }
 
 .acv-status {

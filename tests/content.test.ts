@@ -2,10 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CAPTURE_REQUEST_TYPE,
   CAPTURE_RESPONSE_TYPE,
+  INSERT_PROMPT_REQUEST_TYPE,
+  INSERT_PROMPT_RESPONSE_TYPE,
   isCaptureRequest,
+  isInsertPromptRequest,
   isSupportedChatGptHost
 } from "../src/messages";
-import { captureCurrentConversation } from "../src/content";
+import { captureCurrentConversation, insertPromptIntoComposer } from "../src/content";
 
 function setupConversationPage(): void {
   document.documentElement.innerHTML = `
@@ -132,9 +135,68 @@ describe("content script capture bridge", () => {
     });
   });
 
+  it("inserts prompts into ChatGPT textarea composers with input events", () => {
+    document.body.innerHTML = `<textarea data-testid="prompt-textarea"></textarea>`;
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea");
+    const inputListener = vi.fn();
+    textarea?.addEventListener("input", inputListener);
+
+    expect(insertPromptIntoComposer("Use this snippet.", document)).toBe(true);
+
+    expect(textarea?.value).toBe("Use this snippet.");
+    expect(document.activeElement).toBe(textarea);
+    expect(inputListener).toHaveBeenCalledTimes(1);
+  });
+
+  it("inserts prompts into contenteditable ProseMirror composers with input events", () => {
+    document.body.innerHTML = `<div contenteditable="true" class="ProseMirror"></div>`;
+    const editor = document.querySelector<HTMLElement>(".ProseMirror");
+    const inputListener = vi.fn();
+    editor?.addEventListener("input", inputListener);
+
+    expect(insertPromptIntoComposer("Draft from snippet.", document)).toBe(true);
+
+    expect(editor?.textContent).toBe("Draft from snippet.");
+    expect(document.activeElement).toBe(editor);
+    expect(inputListener).toHaveBeenCalledTimes(1);
+  });
+
+  it("responds to popup prompt insertion messages and reports missing composers", async () => {
+    const { listener } = await loadContentScriptWithChromeMock();
+    const insertedResponse = vi.fn();
+
+    document.body.innerHTML = `<textarea data-testid="prompt-textarea"></textarea>`;
+    const keepsChannelOpen = listener(
+      { type: INSERT_PROMPT_REQUEST_TYPE, prompt: "Prompt body" },
+      {},
+      insertedResponse
+    );
+
+    expect(keepsChannelOpen).toBe(false);
+    expect(document.querySelector("textarea")?.textContent).toBe("");
+    expect(document.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Prompt body");
+    expect(insertedResponse).toHaveBeenCalledWith({
+      type: INSERT_PROMPT_RESPONSE_TYPE,
+      inserted: true,
+      error: undefined
+    });
+
+    document.body.innerHTML = "";
+    const missingResponse = vi.fn();
+    listener({ type: INSERT_PROMPT_REQUEST_TYPE, prompt: "Prompt body" }, {}, missingResponse);
+
+    expect(missingResponse).toHaveBeenCalledWith({
+      type: INSERT_PROMPT_RESPONSE_TYPE,
+      inserted: false,
+      error: "ChatGPT composer was not found"
+    });
+  });
+
   it("recognizes capture requests and supported ChatGPT hosts", () => {
     expect(isCaptureRequest({ type: CAPTURE_REQUEST_TYPE })).toBe(true);
     expect(isCaptureRequest({ type: "other" })).toBe(false);
+    expect(isInsertPromptRequest({ type: INSERT_PROMPT_REQUEST_TYPE, prompt: "Prompt" })).toBe(true);
+    expect(isInsertPromptRequest({ type: INSERT_PROMPT_REQUEST_TYPE })).toBe(false);
     expect(isSupportedChatGptHost("chatgpt.com")).toBe(true);
     expect(isSupportedChatGptHost("chat.openai.com")).toBe(true);
     expect(isSupportedChatGptHost("example.com")).toBe(false);

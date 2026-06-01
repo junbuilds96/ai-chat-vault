@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "AI Chat Vault",
-  "description": "Export ChatGPT conversations to local Markdown from the Chrome toolbar.",
+  "description": "Local-first ChatGPT toolkit for Markdown export and prompt snippets.",
   "version": "0.1.0",
-  "permissions": [],
+  "permissions": ["storage"],
   "action": {
     "default_title": "AI Chat Vault",
     "default_popup": "popup.html"
