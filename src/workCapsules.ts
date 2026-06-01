@@ -74,6 +74,7 @@ export type WorkCapsuleContextPromptSource = Omit<WorkCapsuleV1, "contextPrompt"
 export interface WorkCapsuleIndexItem {
   id: string;
   title: string;
+  project?: string;
   goal: string;
   sourceTitle: string;
   sourceUrl: string;
@@ -638,6 +639,7 @@ function normalizeWorkCapsuleIndex(value: unknown): WorkCapsuleIndexItem[] {
 
       const id = compactString(item.id);
       const title = compactString(item.title);
+      const project = compactString(item.project);
       const goal = compactString(item.goal);
       const sourceTitle = compactString(item.sourceTitle);
       const sourceUrl = compactString(item.sourceUrl);
@@ -648,15 +650,32 @@ function normalizeWorkCapsuleIndex(value: unknown): WorkCapsuleIndexItem[] {
         return [];
       }
 
-      return [{ id, title, goal, sourceTitle, sourceUrl, createdAt, updatedAt }];
+      return [
+        {
+          id,
+          title,
+          ...(project ? { project } : {}),
+          goal,
+          sourceTitle,
+          sourceUrl,
+          createdAt,
+          updatedAt
+        }
+      ];
     })
     .sort(compareIndexItems);
 }
 
 function workCapsuleIndexItem(capsule: WorkCapsuleV1): WorkCapsuleIndexItem {
+  const project =
+    "project" in capsule && typeof capsule.project === "string"
+      ? compactString(capsule.project)
+      : "";
+
   return {
     id: capsule.id,
     title: capsule.title,
+    ...(project ? { project } : {}),
     goal: capsule.goal,
     sourceTitle: capsule.source.title,
     sourceUrl: capsule.source.url,

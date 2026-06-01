@@ -262,6 +262,24 @@ function workCapsuleRecent(): HTMLElement {
   return recent;
 }
 
+function workCapsuleLibrary(): HTMLElement {
+  const library = document.querySelector<HTMLElement>(".acv-work-capsule-library");
+  if (!library) {
+    throw new Error("Missing work capsule library panel");
+  }
+  return library;
+}
+
+function libraryRows(): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>(".acv-work-capsule-library-row"));
+}
+
+function libraryButtons(action: string): HTMLButtonElement[] {
+  return Array.from(
+    document.querySelectorAll<HTMLButtonElement>(`button[data-acv-action="${action}"]`)
+  );
+}
+
 function capsuleField(field: string): HTMLInputElement | HTMLTextAreaElement {
   const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
     `[data-acv-capsule-field="${field}"]`
@@ -817,6 +835,210 @@ describe("toolbar popup", () => {
     expect(status()).toBe("Reopened saved capsule");
   });
 
+  it("loads the local Work Capsule Library from the saved index after capture", async () => {
+    const currentConversationCapsule = workCapsule();
+    const otherConversationCapsule = workCapsule({
+      id: "capsule-other",
+      title: "Other Project Capsule",
+      goal: "Reuse a capsule from a different saved conversation.",
+      contextPrompt: "Context from an unrelated saved conversation.",
+      source: {
+        ...workCapsule().source,
+        title: "Other ChatGPT planning chat",
+        url: "https://chatgpt.com/c/other-project"
+      },
+      updatedAt: "2026-06-01T03:30:00.000Z"
+    });
+    installChromeMock("https://chatgpt.com/c/test", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: otherConversationCapsule.id,
+          title: otherConversationCapsule.title,
+          project: "Client Launch",
+          goal: otherConversationCapsule.goal,
+          sourceTitle: otherConversationCapsule.source.title,
+          sourceUrl: otherConversationCapsule.source.url,
+          createdAt: otherConversationCapsule.createdAt,
+          updatedAt: otherConversationCapsule.updatedAt
+        },
+        {
+          id: currentConversationCapsule.id,
+          title: currentConversationCapsule.title,
+          goal: currentConversationCapsule.goal,
+          sourceTitle: currentConversationCapsule.source.title,
+          sourceUrl: currentConversationCapsule.source.url,
+          createdAt: currentConversationCapsule.createdAt,
+          updatedAt: currentConversationCapsule.updatedAt
+        }
+      ],
+      [workCapsuleBodyKey(currentConversationCapsule.id)]: currentConversationCapsule,
+      [workCapsuleBodyKey(otherConversationCapsule.id)]: otherConversationCapsule
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+
+    expect(workCapsuleLibrary().hidden).toBe(false);
+    expect(workCapsuleLibrary().textContent).toContain("Library");
+    expect(libraryRows()).toHaveLength(2);
+    expect(libraryRows()[0].dataset.acvCapsuleId).toBe("capsule-other");
+    expect(libraryRows()[0].textContent).toBe(
+      "Other Project CapsuleReuse a capsule from a different saved conversation.Client LaunchUpdated 2026-06-01T03:30:00.000ZReopenCopy context"
+    );
+    expect(libraryRows()[1].textContent).toBe(
+      "Saved Retrieval CapsuleResume the saved work capsule from this conversation.Popup Test - ChatGPTUpdated 2026-06-01T02:00:00.000ZReopenCopy context"
+    );
+    expect(workCapsuleRecent().hidden).toBe(false);
+  });
+
+  it("reopens a Work Capsule Library body by id into the structured editor", async () => {
+    const saved = workCapsule({
+      id: "capsule-library",
+      title: "Library Body Capsule",
+      goal: "Resume this capsule from the library, not the current thread.",
+      contextPrompt: "Library context prompt should stay editable.",
+      source: {
+        ...workCapsule().source,
+        title: "Different ChatGPT source",
+        url: "https://chatgpt.com/c/different-source"
+      },
+      facts: [{ id: "fact-1", text: "This body was loaded by id." }],
+      nextActions: [{ id: "action-1", text: "Use the saved body.", status: "todo", owner: "user" }],
+      updatedAt: "2026-06-01T04:00:00.000Z"
+    });
+    installChromeMock("https://chatgpt.com/c/test", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: saved.id,
+          title: saved.title,
+          goal: saved.goal,
+          sourceTitle: saved.source.title,
+          sourceUrl: saved.source.url,
+          createdAt: saved.createdAt,
+          updatedAt: saved.updatedAt
+        }
+      ],
+      [workCapsuleBodyKey(saved.id)]: saved
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+
+    libraryButtons("reopen-library-capsule")[0].click();
+    await flushAsyncClick();
+
+    expect(workCapsuleFields().hidden).toBe(false);
+    expect(capsuleField("title").value).toBe("Library Body Capsule");
+    expect(capsuleField("goal").value).toBe(
+      "Resume this capsule from the library, not the current thread."
+    );
+    expect(capsuleField("contextPrompt").value).toBe(
+      "Library context prompt should stay editable."
+    );
+    expect(capsuleField("facts").value).toBe("This body was loaded by id.");
+    expect(capsuleField("nextActions").value).toBe("Use the saved body.");
+    expect(status()).toBe("Reopened saved capsule");
+  });
+
+  it("copies Work Capsule Library context by id across conversations", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+    const saved = workCapsule({
+      id: "capsule-cross-thread",
+      title: "Cross Thread Capsule",
+      goal: "Copy context from another saved conversation.",
+      contextPrompt: "Use this saved context outside the original conversation.",
+      source: {
+        ...workCapsule().source,
+        title: "Earlier ChatGPT thread",
+        url: "https://chatgpt.com/c/earlier-thread"
+      },
+      updatedAt: "2026-06-01T04:30:00.000Z"
+    });
+    installChromeMock("https://chatgpt.com/c/test", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: saved.id,
+          title: saved.title,
+          goal: saved.goal,
+          sourceTitle: saved.source.title,
+          sourceUrl: saved.source.url,
+          createdAt: saved.createdAt,
+          updatedAt: saved.updatedAt
+        }
+      ],
+      [workCapsuleBodyKey(saved.id)]: saved
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+
+    libraryButtons("copy-library-capsule-context")[0].click();
+    await flushAsyncClick();
+
+    expect(writeText).toHaveBeenCalledWith(
+      "Use this saved context outside the original conversation."
+    );
+    expect(workCapsuleFields().hidden).toBe(true);
+    expect(status()).toBe("Copied capsule context to clipboard");
+  });
+
+  it("handles stale or invalid Work Capsule Library bodies without opening the editor", async () => {
+    installChromeMock("https://chatgpt.com/c/test", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: "missing-body",
+          title: "Missing Body",
+          goal: "This index entry no longer has a stored body.",
+          sourceTitle: "Older thread",
+          sourceUrl: "https://chatgpt.com/c/missing-body",
+          createdAt: "2026-06-01T00:00:00.000Z",
+          updatedAt: "2026-06-01T06:00:00.000Z"
+        },
+        {
+          id: "invalid-body",
+          title: "Invalid Body",
+          goal: "This body fails validation.",
+          sourceTitle: "Older thread",
+          sourceUrl: "https://chatgpt.com/c/invalid-body",
+          createdAt: "2026-06-01T00:00:00.000Z",
+          updatedAt: "2026-06-01T05:00:00.000Z"
+        }
+      ],
+      [workCapsuleBodyKey("invalid-body")]: workCapsule({
+        id: "invalid-body",
+        title: ""
+      })
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+
+    expect(workCapsuleLibrary().hidden).toBe(false);
+    expect(libraryRows()).toHaveLength(2);
+
+    libraryButtons("reopen-library-capsule")[0].click();
+    await flushAsyncClick();
+    expect(status()).toBe("Saved capsule could not be loaded");
+    expect(workCapsuleFields().hidden).toBe(true);
+
+    libraryButtons("reopen-library-capsule")[1].click();
+    await flushAsyncClick();
+    expect(status()).toBe("Saved capsule could not be loaded");
+    expect(workCapsuleFields().hidden).toBe(true);
+  });
+
   it("shows a delete action for the recent saved Work Capsule", async () => {
     const saved = workCapsule();
     installChromeMock("https://chatgpt.com/c/test?model=gpt-5", {
@@ -1047,7 +1269,7 @@ describe("toolbar popup", () => {
     expect(status()).toBe("Downloaded capsule Markdown file");
   });
 
-  it("does not call network APIs during the Work Capsule popup loop", async () => {
+  it("does not call network APIs during the Work Capsule popup and library loop", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     const confirm = vi.fn(() => true);
     Object.defineProperty(navigator, "clipboard", {
@@ -1063,10 +1285,39 @@ describe("toolbar popup", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     vi.stubGlobal("XMLHttpRequest", xhrMock);
+    const saved = workCapsule({
+      id: "capsule-library-network-guard",
+      title: "Library Network Guard",
+      contextPrompt: "Copy this saved prompt without network APIs.",
+      source: {
+        ...workCapsule().source,
+        title: "Saved library source",
+        url: "https://chatgpt.com/c/library-network-guard"
+      },
+      updatedAt: "2026-06-01T05:30:00.000Z"
+    });
+    installChromeMock("https://chatgpt.com/c/test", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: saved.id,
+          title: saved.title,
+          goal: saved.goal,
+          sourceTitle: saved.source.title,
+          sourceUrl: saved.source.url,
+          createdAt: saved.createdAt,
+          updatedAt: saved.updatedAt
+        }
+      ],
+      [workCapsuleBodyKey(saved.id)]: saved
+    });
 
     await loadPopup();
     await flushPromptLoad();
     button("capture").click();
+    await flushAsyncClick();
+    libraryButtons("copy-library-capsule-context")[0].click();
+    await flushAsyncClick();
+    libraryButtons("reopen-library-capsule")[0].click();
     await flushAsyncClick();
     button("create-capsule").click();
     await flushAsyncClick();

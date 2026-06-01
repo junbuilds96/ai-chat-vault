@@ -34,10 +34,13 @@ import {
   createWorkCapsule,
   deleteWorkCapsule,
   findMostRecentWorkCapsuleBySourceUrl,
+  getWorkCapsule,
+  listWorkCapsules,
   renderWorkCapsuleMarkdown,
   type WorkCapsuleAction,
   type WorkCapsuleArtifact,
   type WorkCapsuleContextPromptSource,
+  type WorkCapsuleIndexItem,
   type WorkCapsuleItem,
   type WorkCapsuleV1
 } from "./workCapsules";
@@ -58,6 +61,7 @@ interface PopupState {
   conversationNoteIdentity: string;
   bookmarks: ConversationBookmark[];
   recentWorkCapsule: WorkCapsuleV1 | null;
+  workCapsuleLibrary: WorkCapsuleIndexItem[];
   workCapsuleDraft: WorkCapsuleV1 | null;
   workCapsuleContextPromptEdited: boolean;
 }
@@ -76,6 +80,7 @@ const state: PopupState = {
   conversationNoteIdentity: "",
   bookmarks: [],
   recentWorkCapsule: null,
+  workCapsuleLibrary: [],
   workCapsuleDraft: null,
   workCapsuleContextPromptEdited: false
 };
@@ -87,6 +92,7 @@ const NAVIGATOR_ROLE_LABELS: Record<MessageNavigatorRole, string> = {
   assistant: "Assistant",
   system: "System"
 };
+const WORK_CAPSULE_LIBRARY_LIMIT = 5;
 
 initPopup();
 
@@ -149,6 +155,7 @@ function initPopup(): void {
         </div>
         <button type="button" data-acv-action="create-capsule">Create Capsule</button>
         <div class="acv-work-capsule-recent" hidden></div>
+        <div class="acv-work-capsule-library" aria-label="Work Capsule Library" hidden></div>
         <div class="acv-work-capsule-fields" hidden>
           <label>
             <span>Title</span>
@@ -278,6 +285,16 @@ async function handlePopupClick(event: MouseEvent): Promise<void> {
 
     if (action === "reopen-capsule") {
       await reopenRecentWorkCapsule();
+      return;
+    }
+
+    if (action === "reopen-library-capsule") {
+      await reopenWorkCapsuleById(button.dataset.acvCapsuleId ?? "");
+      return;
+    }
+
+    if (action === "copy-library-capsule-context") {
+      await copyWorkCapsuleContextById(button.dataset.acvCapsuleId ?? "");
       return;
     }
 
@@ -568,14 +585,17 @@ async function updateCapturedConversation(conversation: ConversationExport): Pro
   state.workCapsuleDraft = null;
   state.workCapsuleContextPromptEdited = false;
   state.recentWorkCapsule = null;
-  const [conversationNote, bookmarks, recentWorkCapsule] = await Promise.all([
+  state.workCapsuleLibrary = [];
+  const [conversationNote, bookmarks, recentWorkCapsule, workCapsuleLibrary] = await Promise.all([
     loadConversationNote(conversation),
     loadConversationBookmarks(),
-    findMostRecentWorkCapsuleBySourceUrl(conversation.url)
+    findMostRecentWorkCapsuleBySourceUrl(conversation.url),
+    listWorkCapsules()
   ]);
   state.conversationNote = conversationNote;
   state.bookmarks = bookmarks;
   state.recentWorkCapsule = recentWorkCapsule;
+  state.workCapsuleLibrary = workCapsuleLibrary;
   preview().value = state.markdown;
   renderConversationNotes();
   renderConversationBookmarks();
@@ -1043,17 +1063,30 @@ function createCapsuleDraftFromSelection(): void {
 async function saveCurrentWorkCapsule(): Promise<void> {
   const capsule = currentWorkCapsuleDraft();
   await createWorkCapsule(capsule);
-  state.recentWorkCapsule = capsule;
+  const [recentWorkCapsule, workCapsuleLibrary] = await Promise.all([
+    state.conversation ? findMostRecentWorkCapsuleBySourceUrl(state.conversation.url) : null,
+    listWorkCapsules()
+  ]);
+  state.recentWorkCapsule = recentWorkCapsule;
+  state.workCapsuleLibrary = workCapsuleLibrary;
   renderWorkCapsuleSection();
   setStatus("Saved capsule locally");
 }
 
-function reopenRecentWorkCapsule(): void {
+async function reopenRecentWorkCapsule(): Promise<void> {
   if (!state.recentWorkCapsule) {
     throw new Error("No saved capsule is available for this conversation");
   }
 
   state.workCapsuleDraft = state.recentWorkCapsule;
+  state.workCapsuleContextPromptEdited = true;
+  renderWorkCapsuleSection();
+  setStatus("Reopened saved capsule");
+}
+
+async function reopenWorkCapsuleById(id: string): Promise<void> {
+  const capsule = await savedWorkCapsuleById(id);
+  state.workCapsuleDraft = capsule;
   state.workCapsuleContextPromptEdited = true;
   renderWorkCapsuleSection();
   setStatus("Reopened saved capsule");
@@ -1080,6 +1113,7 @@ async function deleteCurrentWorkCapsule(): Promise<void> {
 
   await deleteWorkCapsule(savedCapsule.id);
   state.recentWorkCapsule = null;
+  state.workCapsuleLibrary = state.workCapsuleLibrary.filter((item) => item.id !== savedCapsule.id);
   if (state.workCapsuleDraft?.id === savedCapsule.id) {
     state.workCapsuleDraft = null;
   }
@@ -1092,6 +1126,26 @@ async function copyCurrentWorkCapsuleContext(): Promise<void> {
   const capsule = currentWorkCapsuleDraft();
   await navigator.clipboard.writeText(capsule.contextPrompt);
   setStatus("Copied capsule context to clipboard");
+}
+
+async function copyWorkCapsuleContextById(id: string): Promise<void> {
+  const capsule = await savedWorkCapsuleById(id);
+  await navigator.clipboard.writeText(capsule.contextPrompt);
+  setStatus("Copied capsule context to clipboard");
+}
+
+async function savedWorkCapsuleById(id: string): Promise<WorkCapsuleV1> {
+  const capsuleId = id.trim();
+  if (!capsuleId) {
+    throw new Error("Saved capsule id is missing");
+  }
+
+  const capsule = await getWorkCapsule(capsuleId);
+  if (!capsule) {
+    throw new Error("Saved capsule could not be loaded");
+  }
+
+  return capsule;
 }
 
 async function copyCurrentWorkCapsuleMarkdown(): Promise<void> {
@@ -1155,13 +1209,16 @@ function renderWorkCapsuleSection(): void {
   const fields = workCapsuleFields();
   const context = workCapsuleContext();
   const recent = workCapsuleRecent();
+  const library = workCapsuleLibrary();
   const draft = state.workCapsuleDraft;
   const deleteButton = workCapsuleDeleteButton();
 
   section.hidden = !state.conversation;
   fields.hidden = !draft;
   recent.hidden = !state.conversation || !state.recentWorkCapsule || !!draft;
+  library.hidden = !state.conversation || state.workCapsuleLibrary.length === 0;
   recent.textContent = "";
+  library.textContent = "";
   deleteButton.hidden = !draft || state.recentWorkCapsule?.id !== draft.id;
 
   if (!state.conversation) {
@@ -1178,6 +1235,10 @@ function renderWorkCapsuleSection(): void {
 
   if (state.recentWorkCapsule && !draft) {
     renderRecentWorkCapsule(state.recentWorkCapsule, recent);
+  }
+
+  if (state.workCapsuleLibrary.length > 0) {
+    renderWorkCapsuleLibrary(library);
   }
 
   if (!draft) {
@@ -1225,6 +1286,76 @@ function renderRecentWorkCapsule(capsule: WorkCapsuleV1, container: HTMLDivEleme
 
   details.append(title, updated);
   container.append(details, actions);
+}
+
+function renderWorkCapsuleLibrary(container: HTMLDivElement): void {
+  const heading = document.createElement("div");
+  heading.className = "acv-work-capsule-library-heading";
+
+  const title = document.createElement("strong");
+  title.textContent = "Library";
+
+  const count = Math.min(state.workCapsuleLibrary.length, WORK_CAPSULE_LIBRARY_LIMIT);
+  const summary = document.createElement("span");
+  summary.textContent = `${count} recent saved capsule${count === 1 ? "" : "s"}`;
+
+  heading.append(title, summary);
+
+  const list = document.createElement("div");
+  list.className = "acv-work-capsule-library-list";
+
+  state.workCapsuleLibrary.slice(0, WORK_CAPSULE_LIBRARY_LIMIT).forEach((capsule) => {
+    list.append(renderWorkCapsuleLibraryRow(capsule));
+  });
+
+  container.append(heading, list);
+}
+
+function renderWorkCapsuleLibraryRow(capsule: WorkCapsuleIndexItem): HTMLDivElement {
+  const row = document.createElement("div");
+  row.className = "acv-work-capsule-library-row";
+  row.dataset.acvCapsuleId = capsule.id;
+
+  const details = document.createElement("div");
+  details.className = "acv-work-capsule-library-details";
+
+  const title = document.createElement("strong");
+  title.textContent = capsule.title;
+
+  const goal = document.createElement("span");
+  goal.textContent = capsule.goal || workCapsuleLibraryLabel(capsule);
+
+  const source = document.createElement("span");
+  source.textContent = workCapsuleLibraryLabel(capsule);
+
+  const updated = document.createElement("span");
+  updated.textContent = `Updated ${capsule.updatedAt}`;
+
+  details.append(title, goal, source, updated);
+
+  const reopenButton = document.createElement("button");
+  reopenButton.type = "button";
+  reopenButton.dataset.acvAction = "reopen-library-capsule";
+  reopenButton.dataset.acvCapsuleId = capsule.id;
+  reopenButton.textContent = "Reopen";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.dataset.acvAction = "copy-library-capsule-context";
+  copyButton.dataset.acvCapsuleId = capsule.id;
+  copyButton.textContent = "Copy context";
+
+  const actions = document.createElement("div");
+  actions.className = "acv-work-capsule-library-actions";
+  actions.append(reopenButton, copyButton);
+
+  row.append(details, actions);
+  return row;
+}
+
+function workCapsuleLibraryLabel(capsule: WorkCapsuleIndexItem): string {
+  const project = capsule.project ? compactFieldLine(capsule.project) : "";
+  return project || capsule.sourceTitle || capsule.sourceUrl || "Unknown source";
 }
 
 function artifactMarkdownInput(artifact: WorkCapsuleArtifact): string {
@@ -1610,6 +1741,15 @@ function workCapsuleRecent(): HTMLDivElement {
     throw new Error("Recent work capsule panel is unavailable");
   }
   return recent;
+}
+
+function workCapsuleLibrary(): HTMLDivElement {
+  const library = document.querySelector<HTMLDivElement>(".acv-work-capsule-library");
+  if (!library) {
+    throw new Error("Work capsule library panel is unavailable");
+  }
+
+  return library;
 }
 
 function workCapsuleContext(): HTMLSpanElement {

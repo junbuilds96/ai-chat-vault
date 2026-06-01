@@ -11,7 +11,7 @@ AI Chat Vault is a compact Chrome Manifest V3 toolkit for turning ChatGPT conver
 - Adds a Message Navigator after capture for local role/text filtering, turn counts, and quick focus in the captured list.
 - Adds Conversation Notes after capture for private per-conversation notes stored locally by conversation identity.
 - Adds Conversation Bookmarks after capture for local saved conversation links with copy/delete controls.
-- Creates editable Work Capsules from selected turns, with local save, copy, and download actions.
+- Creates editable Work Capsules from selected turns, with local save, library retrieval, copy, and download actions.
 - Previews Markdown before export.
 - Copies Markdown to the clipboard.
 - Downloads a `.md` file locally with a safe, readable filename.
@@ -47,7 +47,7 @@ The popup includes a compact **Prompt Library** with default snippets such as `/
 
 After capture, **Work Capsule** appears with a **Create Capsule** action. Check the messages you want in the capsule, then create a local draft with structured editable fields for title, goal, context prompt, reusable context, decisions, constraints, facts, open questions, next actions, and artifacts. The context prompt is generated from the selected excerpts and capsule fields, stays editable, and is the text copied by **Copy context** for pasting into a new AI chat. The draft records `selectedTurnIds` such as `message-1` and stores selected excerpts only for checked messages, not the full raw transcript.
 
-Use **Save capsule** to persist the draft in `chrome.storage.local`, **Copy context** to copy the editable context prompt, **Copy Markdown** for the rendered capsule, or **Download capsule** for a local `.md` file. When a saved capsule already matches the captured conversation URL, the popup shows it as a recent capsule with **Reopen** so you can retrieve and reuse that local draft; **Delete** removes the saved capsule from local storage after confirmation. If no messages are checked, capsule creation shows the same selection error as export: `Select at least one message to export`. The loop is deterministic and local-only; it does not call a backend, cloud service, analytics endpoint, remote LLM, `fetch`, or `XMLHttpRequest`.
+Use **Save capsule** to persist the draft in `chrome.storage.local`, **Copy context** to copy the editable context prompt, **Copy Markdown** for the rendered capsule, or **Download capsule** for a local `.md` file. After capture, the popup also loads the local `workCapsules:v1` index and shows a compact **Library** of recent saved capsules labeled by project when available, otherwise by source conversation text. Library rows show title, goal/source, updated time, and provide **Reopen** plus **Copy context** actions; these actions load the stored capsule body by ID, so a saved context prompt can be reused even when the current conversation is different. When a saved capsule already matches the captured conversation URL, the existing recent capsule panel still appears with **Reopen** and **Delete**; **Delete** removes that saved capsule from local storage after confirmation. If no messages are checked, capsule creation shows the same selection error as export: `Select at least one message to export`. The loop is deterministic and local-only; it does not call a backend, cloud service, analytics endpoint, remote LLM, `fetch`, or `XMLHttpRequest`.
 
 ## Development
 
