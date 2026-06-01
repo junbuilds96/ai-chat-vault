@@ -171,6 +171,28 @@ describe("conversation extraction", () => {
     );
   });
 
+  it("preserves checked and unchecked ChatGPT task list markers without UI text", () => {
+    document.body.innerHTML = `
+      <article data-message-author-role="assistant">
+        <div class="markdown prose">
+          <ul>
+            <li><input type="checkbox" checked disabled>Done with <code>npm test</code></li>
+            <li>
+              <input type="checkbox" disabled>
+              Review <code>src/extractor.ts</code>
+              <button>Copy</button>
+              <span hidden>Copied</span>
+            </li>
+          </ul>
+        </div>
+      </article>
+    `;
+
+    expect(collectMessages(document)[0].text).toBe(
+      ["- [x] Done with `npm test`", "- [ ] Review `src/extractor.ts`"].join("\n")
+    );
+  });
+
   it("preserves inline code in ChatGPT markdown paragraphs and list items", () => {
     document.body.innerHTML = `
       <article data-message-author-role="assistant">

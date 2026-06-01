@@ -100,7 +100,7 @@ export function normalizeMessageText(element: HTMLElement): string {
 
   clone
     .querySelectorAll(
-      "script, style, button, nav, form, textarea, input, select, [aria-hidden='true'], [hidden], .sr-only"
+      "script, style, button, nav, form, textarea, input:not([type='checkbox']), select, [aria-hidden='true'], [hidden], .sr-only"
     )
     .forEach((node) => node.remove());
 
@@ -204,10 +204,21 @@ function markdownList(list: HTMLOListElement | HTMLUListElement): string {
   return Array.from(list.children)
     .filter((item): item is HTMLLIElement => item.tagName.toLowerCase() === "li")
     .map((item, index) => {
-      const marker = ordered ? `${index + 1}.` : "-";
+      const taskMarker = markdownTaskMarker(item);
+      const marker = taskMarker ?? (ordered ? `${index + 1}.` : "-");
       return `${marker} ${normalizeInlineText(elementText(item))}`;
     })
     .join("\n");
+}
+
+function markdownTaskMarker(item: HTMLLIElement): string | null {
+  const checkbox = item.querySelector<HTMLInputElement>("input[type='checkbox']");
+  if (!checkbox) {
+    return null;
+  }
+
+  checkbox.remove();
+  return checkbox.checked ? "- [x]" : "- [ ]";
 }
 
 function markdownListText(list: HTMLOListElement | HTMLUListElement): string {
