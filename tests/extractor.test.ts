@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { collectMessages, extractTitle } from "../src/extractor";
 import { conversationToMarkdown, markdownFilename } from "../src/markdown";
-import { allMessageIndexes, filterConversationMessages, shortMessagePreview } from "../src/selection";
+import {
+  allMessageIndexes,
+  filterConversationMessages,
+  messageIndexesForSelection,
+  shortMessagePreview
+} from "../src/selection";
 
 describe("conversation extraction", () => {
   it("collects ChatGPT role-tagged messages in order", () => {
@@ -262,6 +267,11 @@ describe("message selection", () => {
 
   it("selects every detected message by default", () => {
     expect([...allMessageIndexes(3)]).toEqual([0, 1, 2]);
+  });
+
+  it("builds replacement selections for bulk controls", () => {
+    expect([...messageIndexesForSelection(3, "all")]).toEqual([0, 1, 2]);
+    expect([...messageIndexesForSelection(3, "none")]).toEqual([]);
   });
 
   it("filters exported messages by checked message index", () => {

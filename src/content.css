@@ -64,20 +64,43 @@
   outline-offset: 2px;
 }
 
+#ai-chat-vault .acv-message-panel {
+  margin: 0 12px 10px;
+}
+
+#ai-chat-vault .acv-message-panel[hidden] {
+  display: none;
+}
+
+#ai-chat-vault .acv-selection-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+
+#ai-chat-vault .acv-selection-actions button {
+  min-height: 26px;
+  padding: 0 8px;
+  color: #1f2937;
+  background: #e5e7eb;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#ai-chat-vault .acv-selection-actions button:hover {
+  background: #d1d5db;
+}
+
 #ai-chat-vault .acv-message-list {
   display: grid;
   gap: 4px;
   max-height: 144px;
-  margin: 0 12px 10px;
   padding: 8px;
   overflow-y: auto;
   background: #f8fafc;
   border: 1px solid #d7dde5;
   border-radius: 6px;
-}
-
-#ai-chat-vault .acv-message-list[hidden] {
-  display: none;
 }
 
 #ai-chat-vault .acv-message-row {

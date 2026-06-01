@@ -2,8 +2,17 @@ import type { ConversationExport, ConversationMessage } from "./extractor";
 
 const DEFAULT_PREVIEW_LENGTH = 84;
 
+export type MessageSelectionMode = "all" | "none";
+
 export function allMessageIndexes(messageCount: number): Set<number> {
   return new Set(Array.from({ length: messageCount }, (_, index) => index));
+}
+
+export function messageIndexesForSelection(
+  messageCount: number,
+  mode: MessageSelectionMode
+): Set<number> {
+  return mode === "all" ? allMessageIndexes(messageCount) : new Set();
 }
 
 export function filterConversationMessages(

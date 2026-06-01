@@ -1,7 +1,12 @@
 import "./content.css";
 import { extractConversation, type ConversationExport } from "./extractor";
 import { conversationToMarkdown, markdownFilename } from "./markdown";
-import { allMessageIndexes, filterConversationMessages, shortMessagePreview } from "./selection";
+import {
+  allMessageIndexes,
+  filterConversationMessages,
+  messageIndexesForSelection,
+  shortMessagePreview
+} from "./selection";
 
 const ROOT_ID = "ai-chat-vault";
 
@@ -38,7 +43,13 @@ function init(): void {
       <button type="button" data-acv-action="copy">Copy</button>
       <button type="button" data-acv-action="download">Download</button>
     </div>
-    <div class="acv-message-list" aria-label="Detected messages" hidden></div>
+    <div class="acv-message-panel" hidden>
+      <div class="acv-selection-actions" aria-label="Message selection controls">
+        <button type="button" data-acv-action="select-all">Select all</button>
+        <button type="button" data-acv-action="select-none">Select none</button>
+      </div>
+      <div class="acv-message-list" aria-label="Detected messages"></div>
+    </div>
     <textarea readonly aria-label="Markdown preview" placeholder="Click Capture to preview this conversation as Markdown."></textarea>
     <div class="acv-status" role="status" aria-live="polite">Ready</div>
   `;
@@ -58,6 +69,11 @@ async function handlePanelClick(event: MouseEvent): Promise<void> {
   try {
     if (action === "capture") {
       capture();
+      return;
+    }
+
+    if (action === "select-all" || action === "select-none") {
+      updateMessageSelection(action === "select-all" ? "all" : "none");
       return;
     }
 
@@ -172,10 +188,24 @@ function updatePreviewFromSelection(): void {
   );
 }
 
+function updateMessageSelection(mode: "all" | "none"): void {
+  if (!state.conversation || state.conversation.messages.length === 0) {
+    return;
+  }
+
+  state.selectedMessageIndexes = messageIndexesForSelection(
+    state.conversation.messages.length,
+    mode
+  );
+  syncMessageCheckboxes();
+  updatePreviewFromSelection();
+}
+
 function renderMessageList(messages: NonNullable<PanelState["conversation"]>["messages"]): void {
+  const panel = messagePanel();
   const list = messageList();
   list.textContent = "";
-  list.hidden = messages.length === 0;
+  panel.hidden = messages.length === 0;
 
   if (messages.length === 0) {
     return;
@@ -205,12 +235,28 @@ function renderMessageList(messages: NonNullable<PanelState["conversation"]>["me
   });
 }
 
+function syncMessageCheckboxes(): void {
+  document
+    .querySelectorAll<HTMLInputElement>(`#${ROOT_ID} input[data-acv-message-index]`)
+    .forEach((checkbox) => {
+      checkbox.checked = state.selectedMessageIndexes.has(Number(checkbox.dataset.acvMessageIndex));
+    });
+}
+
 function preview(): HTMLTextAreaElement {
   const textarea = document.querySelector<HTMLTextAreaElement>(`#${ROOT_ID} textarea`);
   if (!textarea) {
     throw new Error("Preview panel is unavailable");
   }
   return textarea;
+}
+
+function messagePanel(): HTMLDivElement {
+  const panel = document.querySelector<HTMLDivElement>(`#${ROOT_ID} .acv-message-panel`);
+  if (!panel) {
+    throw new Error("Message selection panel is unavailable");
+  }
+  return panel;
 }
 
 function messageList(): HTMLDivElement {
