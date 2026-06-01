@@ -117,7 +117,11 @@ export function normalizeMessageText(element: HTMLElement): string {
   });
 
   clone.querySelectorAll("pre").forEach((pre) => {
-    const text = pre.textContent ?? "";
+    if (!clone.contains(pre)) {
+      return;
+    }
+
+    const text = codeBlockText(pre as HTMLElement);
     const language = detectCodeBlockLanguage(pre as HTMLElement, clone);
     pre.textContent = `\n\n\`\`\`${language}\n${text.trim()}\n\`\`\`\n\n`;
   });
@@ -274,8 +278,22 @@ function elementText(element: Element): string {
   return (element as HTMLElement).innerText || element.textContent || "";
 }
 
+function codeBlockText(pre: HTMLElement): string {
+  const contentElement = codeBlockContentElement(pre);
+  return contentElement ? elementText(contentElement) : elementText(pre);
+}
+
+function codeBlockContentElement(pre: HTMLElement): HTMLElement | null {
+  const codeMirrorContent = pre.querySelector<HTMLElement>("pre.cm-content, .cm-content");
+  if (codeMirrorContent && codeMirrorContent !== pre) {
+    return codeMirrorContent;
+  }
+
+  return pre.querySelector<HTMLElement>("code");
+}
+
 function detectCodeBlockLanguage(pre: HTMLElement, root: HTMLElement): string {
-  const code = pre.querySelector<HTMLElement>("code");
+  const code = codeBlockContentElement(pre);
 
   for (const element of [code, pre]) {
     if (!element) {
@@ -288,10 +306,36 @@ function detectCodeBlockLanguage(pre: HTMLElement, root: HTMLElement): string {
     }
   }
 
+  const visibleLabel = codeBlockLanguageLabel(pre);
+  if (visibleLabel) {
+    return visibleLabel;
+  }
+
   const nearbyLabel = nearbyCodeLanguageLabel(pre, root);
   if (nearbyLabel) {
     nearbyLabel.element.remove();
     return nearbyLabel.language;
+  }
+
+  return "";
+}
+
+function codeBlockLanguageLabel(pre: HTMLElement): string {
+  const contentElement = codeBlockContentElement(pre);
+
+  for (const element of Array.from(pre.querySelectorAll<HTMLElement>("*"))) {
+    if (contentElement && (element === contentElement || contentElement.contains(element))) {
+      continue;
+    }
+
+    if (element.closest("button, [role='button']")) {
+      continue;
+    }
+
+    const language = normalizeVisibleCodeLanguage(elementText(element));
+    if (language) {
+      return language;
+    }
   }
 
   return "";
