@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CAPTURE_REQUEST_TYPE,
   CAPTURE_RESPONSE_TYPE,
-  captureCurrentConversation,
   isCaptureRequest,
   isSupportedChatGptHost
-} from "../src/content";
+} from "../src/messages";
+import { captureCurrentConversation } from "../src/content";
 
 function setupConversationPage(): void {
   document.documentElement.innerHTML = `

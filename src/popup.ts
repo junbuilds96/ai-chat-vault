@@ -12,7 +12,7 @@ import {
   CAPTURE_RESPONSE_TYPE,
   type CaptureResponse,
   isSupportedChatGptHost
-} from "./content";
+} from "./messages";
 
 interface PopupState {
   conversation: ConversationExport | null;
@@ -151,7 +151,7 @@ function activeTab(): Promise<chrome.tabs.Tab> {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const lastError = chrome.runtime.lastError;
       if (lastError) {
-        reject(new Error(lastError.message));
+        reject(new Error(captureMessageError(lastError.message)));
         return;
       }
 
@@ -171,18 +171,33 @@ function sendCaptureMessage(tabId: number): Promise<CaptureResponse & { error?: 
     chrome.tabs.sendMessage(tabId, { type: CAPTURE_REQUEST_TYPE }, (response) => {
       const lastError = chrome.runtime.lastError;
       if (lastError) {
-        reject(new Error(lastError.message));
+        reject(new Error(captureMessageError(lastError.message)));
         return;
       }
 
       if (!response) {
-        reject(new Error("AI Chat Vault is not available on this tab yet. Reload ChatGPT and try again."));
+        reject(new Error(reloadChatGptTabMessage()));
         return;
       }
 
       resolve(response as CaptureResponse & { error?: string });
     });
   });
+}
+
+function captureMessageError(message?: string): string {
+  if (
+    message?.includes("Receiving end does not exist") ||
+    message?.includes("Could not establish connection")
+  ) {
+    return reloadChatGptTabMessage();
+  }
+
+  return message ?? "Capture failed";
+}
+
+function reloadChatGptTabMessage(): string {
+  return "Reload the ChatGPT tab after installing or updating AI Chat Vault, then try Capture again.";
 }
 
 function updateCapturedConversation(conversation: ConversationExport): void {

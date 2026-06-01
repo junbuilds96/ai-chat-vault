@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const CAPTURE_REQUEST_TYPE = "AI_CHAT_VAULT_CAPTURE";
-const CAPTURE_RESPONSE_TYPE = "AI_CHAT_VAULT_CAPTURE_RESULT";
+import { CAPTURE_REQUEST_TYPE, CAPTURE_RESPONSE_TYPE } from "../src/messages";
 
 const conversation = {
   title: "Popup Test - ChatGPT",
@@ -15,6 +13,7 @@ const conversation = {
 };
 
 function installChromeMock(tabUrl = "https://chatgpt.com/c/test") {
+  const runtime: { lastError?: { message?: string } } = {};
   const query = vi.fn((queryInfo, callback) => {
     expect(queryInfo).toEqual({ active: true, currentWindow: true });
     callback([{ id: 7, url: tabUrl }]);
@@ -26,11 +25,33 @@ function installChromeMock(tabUrl = "https://chatgpt.com/c/test") {
   });
 
   vi.stubGlobal("chrome", {
-    runtime: { lastError: undefined },
+    runtime,
     tabs: { query, sendMessage }
   });
 
-  return { query, sendMessage };
+  return { query, runtime, sendMessage };
+}
+
+function installChromeMockWithSendMessageError(message: string) {
+  const runtime: { lastError?: { message?: string } } = {};
+  const query = vi.fn((queryInfo, callback) => {
+    expect(queryInfo).toEqual({ active: true, currentWindow: true });
+    callback([{ id: 7, url: "https://chatgpt.com/c/test" }]);
+  });
+  const sendMessage = vi.fn((tabId, request, callback) => {
+    expect(tabId).toBe(7);
+    expect(request).toEqual({ type: CAPTURE_REQUEST_TYPE });
+    runtime.lastError = { message };
+    callback(undefined);
+    runtime.lastError = undefined;
+  });
+
+  vi.stubGlobal("chrome", {
+    runtime,
+    tabs: { query, sendMessage }
+  });
+
+  return { query, runtime, sendMessage };
 }
 
 async function loadPopup(): Promise<void> {
@@ -126,5 +147,20 @@ describe("toolbar popup", () => {
 
     expect(status()).toBe("Open a ChatGPT tab before capturing");
     expect(chromeMock.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "Receiving end does not exist.",
+    "Could not establish connection."
+  ])("explains stale content-script receivers after extension updates: %s", async (message) => {
+    installChromeMockWithSendMessageError(message);
+    await loadPopup();
+
+    button("capture").click();
+    await flushAsyncClick();
+
+    expect(status()).toBe(
+      "Reload the ChatGPT tab after installing or updating AI Chat Vault, then try Capture again."
+    );
   });
 });
