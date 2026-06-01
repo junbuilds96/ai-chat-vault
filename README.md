@@ -30,9 +30,10 @@ npm install
 npm test
 npm run build
 npm run package
+npm run verify
 ```
 
-The build writes the unpacked extension to `dist/`. The package command creates `release/ai-chat-vault.zip`.
+The build writes the unpacked extension to `dist/`. The package command creates `release/ai-chat-vault.zip` and runs the runtime verification gate. `npm run verify` is the full release gate: tests, build, package, manifest checks, classic content-script parsing, popup/content bundle isolation, package zip consistency, and a jsdom content-script messaging smoke.
 
 Chrome Web Store privacy and permission notes are in [docs/chrome-web-store-readiness.md](docs/chrome-web-store-readiness.md).
 

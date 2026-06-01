@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build --mode content && vite build --mode popup && node scripts/verify-popup-bundle.mjs",
     "test": "vitest run",
-    "package": "npm run build && node scripts/package-extension.mjs"
+    "verify": "npm test && npm run build && npm run package && node scripts/verify-extension-runtime.mjs",
+    "package": "npm run build && node scripts/package-extension.mjs && node scripts/verify-extension-runtime.mjs"
   },
   "keywords": [
     "chrome-extension",

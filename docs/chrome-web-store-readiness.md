@@ -22,9 +22,9 @@ This project keeps the extension privacy model local-only for Chrome Web Store r
 Before submitting a package, run:
 
 ```sh
-npm test
-npm run build
-npm run package
+npm run verify
 ```
+
+This gate runs tests, builds the extension, packages it, validates manifest permissions and referenced files, verifies `content.js` parses as a classic MV3 content script with no `import`/`export` module syntax, checks popup/content bundle isolation, confirms the zip exactly matches `dist/`, and runs a jsdom content-script messaging smoke.
 
 Upload `release/ai-chat-vault.zip` and keep the store listing privacy answers aligned with the disclosure above.
