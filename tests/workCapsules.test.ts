@@ -13,6 +13,7 @@ import {
   listWorkCapsules,
   renderWorkCapsuleMarkdown,
   renderWorkCapsuleOutputPreset,
+  renderWorkCapsuleSourceCitation,
   updateWorkCapsule,
   validateWorkCapsuleV1,
   workCapsuleBodyKey,
@@ -292,6 +293,20 @@ Client Launch
         })
       )
     ).not.toContain("Selected excerpts");
+  });
+});
+
+describe("work capsule source citations", () => {
+  it("renders a deterministic source citation with a project label", () => {
+    expect(renderWorkCapsuleSourceCitation(capsule({ project: "Client Launch" }))).toBe(
+      "Work Capsule: Launch Plan | Project: Client Launch | Source conversation: ChatGPT planning chat | Source URL: https://chatgpt.com/c/local-planning | Selected turn IDs: turn-1, turn-2 | Updated: 2026-06-01T00:00:00.000Z"
+    );
+  });
+
+  it("renders a deterministic source citation without a project label", () => {
+    expect(renderWorkCapsuleSourceCitation(capsule())).toBe(
+      "Work Capsule: Launch Plan | Source conversation: ChatGPT planning chat | Source URL: https://chatgpt.com/c/local-planning | Selected turn IDs: turn-1, turn-2 | Updated: 2026-06-01T00:00:00.000Z"
+    );
   });
 });
 

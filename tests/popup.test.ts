@@ -835,7 +835,7 @@ describe("toolbar popup", () => {
     expect(workCapsuleFields().hidden).toBe(true);
     expect(workCapsuleRecent().hidden).toBe(false);
     expect(workCapsuleRecent().textContent).toBe(
-      "Saved Retrieval CapsuleCurrent ClientUpdated 2026-06-01T02:00:00.000ZReopenDelete"
+      "Saved Retrieval CapsuleCurrent ClientUpdated 2026-06-01T02:00:00.000ZReopenCopy sourceDelete"
     );
     expect(document.querySelector("[data-acv-work-capsule-context]")?.textContent).toBe(
       "Recent capsule available"
@@ -914,19 +914,19 @@ describe("toolbar popup", () => {
     expect(libraryRows()).toHaveLength(2);
     expect(libraryRows()[0].dataset.acvCapsuleId).toBe("capsule-other");
     expect(libraryRows()[0].textContent).toBe(
-      "Other Project CapsuleReuse a capsule from a different saved conversation.Client LaunchUpdated 2026-06-01T03:30:00.000ZReopenCopy contextRemove"
+      "Other Project CapsuleReuse a capsule from a different saved conversation.Client LaunchUpdated 2026-06-01T03:30:00.000ZReopenCopy contextCopy sourceRemove"
     );
     expect(libraryRows()[1].textContent).toBe(
-      "Saved Retrieval CapsuleResume the saved work capsule from this conversation.Popup Test - ChatGPTUpdated 2026-06-01T02:00:00.000ZReopenCopy contextRemove"
+      "Saved Retrieval CapsuleResume the saved work capsule from this conversation.Popup Test - ChatGPTUpdated 2026-06-01T02:00:00.000ZReopenCopy contextCopy sourceRemove"
     );
     expect(
       libraryRows()[0].querySelectorAll<HTMLButtonElement>("button").length
-    ).toBe(3);
+    ).toBe(4);
     expect(
       Array.from(libraryRows()[0].querySelectorAll<HTMLButtonElement>("button")).map(
         (rowButton) => rowButton.textContent
       )
-    ).toEqual(["Reopen", "Copy context", "Remove"]);
+    ).toEqual(["Reopen", "Copy context", "Copy source", "Remove"]);
     expect(workCapsuleRecent().hidden).toBe(false);
   });
 
@@ -1061,7 +1061,94 @@ describe("toolbar popup", () => {
     expect(status()).toBe("Copied Gemini context to clipboard");
   });
 
+  it("copies source citations for recent, reopened, and library Work Capsules", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+    const currentConversationCapsule = workCapsule({ project: "Current Client" });
+    const otherConversationCapsule = workCapsule({
+      id: "capsule-source-copy",
+      title: "Source Copy Capsule",
+      project: "Library Project",
+      goal: "Copy only the source citation.",
+      source: {
+        ...workCapsule().source,
+        title: "Earlier ChatGPT thread",
+        url: "https://chatgpt.com/c/source-copy",
+        selectedTurnIds: ["message-1", "message-3"]
+      },
+      updatedAt: "2026-06-01T04:45:00.000Z"
+    });
+    installChromeMock("https://chatgpt.com/c/test?model=gpt-5", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: otherConversationCapsule.id,
+          title: otherConversationCapsule.title,
+          project: otherConversationCapsule.project,
+          goal: otherConversationCapsule.goal,
+          sourceTitle: otherConversationCapsule.source.title,
+          sourceUrl: otherConversationCapsule.source.url,
+          createdAt: otherConversationCapsule.createdAt,
+          updatedAt: otherConversationCapsule.updatedAt
+        },
+        {
+          id: currentConversationCapsule.id,
+          title: currentConversationCapsule.title,
+          project: currentConversationCapsule.project,
+          goal: currentConversationCapsule.goal,
+          sourceTitle: currentConversationCapsule.source.title,
+          sourceUrl: currentConversationCapsule.source.url,
+          createdAt: currentConversationCapsule.createdAt,
+          updatedAt: currentConversationCapsule.updatedAt
+        }
+      ],
+      [workCapsuleBodyKey(currentConversationCapsule.id)]: currentConversationCapsule,
+      [workCapsuleBodyKey(otherConversationCapsule.id)]: otherConversationCapsule
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+
+    button("copy-capsule-source-citation").click();
+    await flushAsyncClick();
+
+    expect(writeText.mock.calls[0][0]).toBe(
+      "Work Capsule: Saved Retrieval Capsule | Project: Current Client | Source conversation: Popup Test - ChatGPT | Source URL: https://chatgpt.com/c/test?model=gpt-5#work | Selected turn IDs: message-2 | Updated: 2026-06-01T02:00:00.000Z"
+    );
+    expect(workCapsuleFields().hidden).toBe(true);
+    expect(status()).toBe("Copied source citation to clipboard");
+
+    button("reopen-capsule").click();
+    await flushAsyncClick();
+    capsuleField("title").value = "Edited Source Title";
+    capsuleField("title").dispatchEvent(new Event("input", { bubbles: true }));
+    button("copy-capsule-source-citation").click();
+    await flushAsyncClick();
+
+    expect(writeText.mock.calls[1][0]).toContain("Work Capsule: Edited Source Title");
+    expect(writeText.mock.calls[1][0]).toContain("Project: Current Client");
+    expect(writeText.mock.calls[1][0]).toContain("Selected turn IDs: message-2");
+    expect(status()).toBe("Copied source citation to clipboard");
+
+    libraryButtons("copy-library-capsule-source-citation")[0].click();
+    await flushAsyncClick();
+
+    expect(writeText.mock.calls[2][0]).toBe(
+      "Work Capsule: Source Copy Capsule | Project: Library Project | Source conversation: Earlier ChatGPT thread | Source URL: https://chatgpt.com/c/source-copy | Selected turn IDs: message-1, message-3 | Updated: 2026-06-01T04:45:00.000Z"
+    );
+    expect(status()).toBe("Copied source citation to clipboard");
+  });
+
   it("handles stale or invalid Work Capsule Library bodies without opening the editor", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
     installChromeMock("https://chatgpt.com/c/test", {
       [WORK_CAPSULE_INDEX_KEY]: [
         {
@@ -1106,6 +1193,11 @@ describe("toolbar popup", () => {
     await flushAsyncClick();
     expect(status()).toBe("Saved capsule could not be loaded");
     expect(workCapsuleFields().hidden).toBe(true);
+
+    libraryButtons("copy-library-capsule-source-citation")[0].click();
+    await flushAsyncClick();
+    expect(status()).toBe("Saved capsule could not be loaded");
+    expect(writeText).not.toHaveBeenCalled();
   });
 
   it("keeps a cross-conversation Work Capsule Library row when removal is canceled", async () => {
@@ -1481,7 +1573,7 @@ describe("toolbar popup", () => {
     expect(chromeMock.remove).not.toHaveBeenCalled();
     expect(workCapsuleRecent().hidden).toBe(false);
     expect(workCapsuleRecent().textContent).toBe(
-      "Saved Retrieval CapsulePopup Test - ChatGPTUpdated 2026-06-01T02:00:00.000ZReopenDelete"
+      "Saved Retrieval CapsulePopup Test - ChatGPTUpdated 2026-06-01T02:00:00.000ZReopenCopy sourceDelete"
     );
     expect(status()).toBe("Capsule delete canceled");
   });
@@ -1595,6 +1687,18 @@ describe("toolbar popup", () => {
       "- message-3 (user): Follow-up three"
     );
     expect(status()).toBe("Copied capsule Markdown to clipboard");
+
+    button("copy-capsule-source-citation").click();
+    await flushAsyncClick();
+    expect(writeText.mock.calls[4][0]).toContain("Work Capsule: Popup Test - ChatGPT");
+    expect(writeText.mock.calls[4][0]).toContain("Source conversation: Popup Test - ChatGPT");
+    expect(writeText.mock.calls[4][0]).toContain(
+      "Source URL: https://chatgpt.com/c/test"
+    );
+    expect(writeText.mock.calls[4][0]).toContain(
+      "Selected turn IDs: message-1, message-2, message-3"
+    );
+    expect(status()).toBe("Copied source citation to clipboard");
   });
 
   it("downloads Work Capsule Markdown", async () => {
@@ -1693,6 +1797,8 @@ describe("toolbar popup", () => {
     button("copy-capsule-context").click();
     await flushAsyncClick();
     button("copy-capsule-markdown").click();
+    await flushAsyncClick();
+    button("copy-capsule-source-citation").click();
     await flushAsyncClick();
     button("save-capsule").click();
     await flushAsyncClick();

@@ -41,6 +41,7 @@ import {
   listWorkCapsules,
   renderWorkCapsuleMarkdown,
   renderWorkCapsuleOutputPreset,
+  renderWorkCapsuleSourceCitation,
   type WorkCapsuleAction,
   type WorkCapsuleArtifact,
   type WorkCapsuleContextPromptSource,
@@ -216,6 +217,7 @@ function initPopup(): void {
             <button type="button" data-acv-action="save-capsule">Save capsule</button>
             <button type="button" data-acv-action="copy-capsule-context">Copy context</button>
             <button type="button" data-acv-action="copy-capsule-markdown">Copy Markdown</button>
+            <button type="button" data-acv-action="copy-capsule-source-citation">Copy source</button>
             <button type="button" data-acv-action="download-capsule">Download capsule</button>
             <button type="button" data-acv-action="delete-capsule" data-acv-capsule-draft-action="true" hidden>Delete capsule</button>
           </div>
@@ -313,6 +315,11 @@ async function handlePopupClick(event: MouseEvent): Promise<void> {
       return;
     }
 
+    if (action === "copy-library-capsule-source-citation") {
+      await copyWorkCapsuleSourceCitationById(button.dataset.acvCapsuleId ?? "");
+      return;
+    }
+
     if (action === "remove-library-capsule") {
       await removeWorkCapsuleFromLibraryById(button.dataset.acvCapsuleId ?? "");
       return;
@@ -335,6 +342,11 @@ async function handlePopupClick(event: MouseEvent): Promise<void> {
 
     if (action === "copy-capsule-markdown") {
       await copyCurrentWorkCapsuleMarkdown();
+      return;
+    }
+
+    if (action === "copy-capsule-source-citation") {
+      await copyCurrentWorkCapsuleSourceCitation();
       return;
     }
 
@@ -1207,6 +1219,18 @@ async function copyWorkCapsuleContextById(id: string): Promise<void> {
   setStatus(`Copied ${selectedWorkCapsuleOutputPresetName()} to clipboard`);
 }
 
+async function copyCurrentWorkCapsuleSourceCitation(): Promise<void> {
+  const capsule = currentOrRecentWorkCapsule();
+  await navigator.clipboard.writeText(renderWorkCapsuleSourceCitation(capsule));
+  setStatus("Copied source citation to clipboard");
+}
+
+async function copyWorkCapsuleSourceCitationById(id: string): Promise<void> {
+  const capsule = await savedWorkCapsuleById(id);
+  await navigator.clipboard.writeText(renderWorkCapsuleSourceCitation(capsule));
+  setStatus("Copied source citation to clipboard");
+}
+
 async function savedWorkCapsuleById(id: string): Promise<WorkCapsuleV1> {
   const capsuleId = id.trim();
   if (!capsuleId) {
@@ -1225,6 +1249,18 @@ async function copyCurrentWorkCapsuleMarkdown(): Promise<void> {
   const capsule = currentWorkCapsuleDraft();
   await navigator.clipboard.writeText(renderWorkCapsuleMarkdown(capsule));
   setStatus("Copied capsule Markdown to clipboard");
+}
+
+function currentOrRecentWorkCapsule(): WorkCapsuleV1 {
+  if (state.workCapsuleDraft) {
+    return currentWorkCapsuleDraft();
+  }
+
+  if (state.recentWorkCapsule) {
+    return state.recentWorkCapsule;
+  }
+
+  throw new Error("Create a capsule draft before using capsule actions");
 }
 
 function downloadCurrentWorkCapsule(): void {
@@ -1378,6 +1414,11 @@ function renderRecentWorkCapsule(capsule: WorkCapsuleV1, container: HTMLDivEleme
   button.dataset.acvAction = "reopen-capsule";
   button.textContent = "Reopen";
 
+  const copySourceButton = document.createElement("button");
+  copySourceButton.type = "button";
+  copySourceButton.dataset.acvAction = "copy-capsule-source-citation";
+  copySourceButton.textContent = "Copy source";
+
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
   deleteButton.dataset.acvAction = "delete-capsule";
@@ -1385,7 +1426,7 @@ function renderRecentWorkCapsule(capsule: WorkCapsuleV1, container: HTMLDivEleme
 
   const actions = document.createElement("div");
   actions.className = "acv-work-capsule-recent-actions";
-  actions.append(button, deleteButton);
+  actions.append(button, copySourceButton, deleteButton);
 
   details.append(title, label, updated);
   container.append(details, actions);
@@ -1448,6 +1489,12 @@ function renderWorkCapsuleLibraryRow(capsule: WorkCapsuleIndexItem): HTMLDivElem
   copyButton.dataset.acvCapsuleId = capsule.id;
   copyButton.textContent = "Copy context";
 
+  const copySourceButton = document.createElement("button");
+  copySourceButton.type = "button";
+  copySourceButton.dataset.acvAction = "copy-library-capsule-source-citation";
+  copySourceButton.dataset.acvCapsuleId = capsule.id;
+  copySourceButton.textContent = "Copy source";
+
   const removeButton = document.createElement("button");
   removeButton.type = "button";
   removeButton.dataset.acvAction = "remove-library-capsule";
@@ -1456,7 +1503,7 @@ function renderWorkCapsuleLibraryRow(capsule: WorkCapsuleIndexItem): HTMLDivElem
 
   const actions = document.createElement("div");
   actions.className = "acv-work-capsule-library-actions";
-  actions.append(reopenButton, copyButton, removeButton);
+  actions.append(reopenButton, copyButton, copySourceButton, removeButton);
 
   row.append(details, actions);
   return row;

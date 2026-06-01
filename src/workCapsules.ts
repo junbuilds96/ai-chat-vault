@@ -211,6 +211,23 @@ export function renderWorkCapsuleMarkdown(capsule: WorkCapsuleV1): string {
   return `${sections.join("\n\n")}\n`;
 }
 
+export function renderWorkCapsuleSourceCitation(capsule: WorkCapsuleV1): string {
+  const selectedTurnIds = capsule.source.selectedTurnIds
+    .map(compactString)
+    .filter(Boolean)
+    .join(", ");
+  const segments = [
+    `Work Capsule: ${compactString(capsule.title) || "Untitled Work Capsule"}`,
+    ...renderOptionalCitationSegments("Project", capsule.project),
+    `Source conversation: ${compactString(capsule.source.title) || "Untitled conversation"}`,
+    `Source URL: ${compactString(capsule.source.url) || "Unknown URL"}`,
+    `Selected turn IDs: ${selectedTurnIds || "None"}`,
+    `Updated: ${compactString(capsule.updatedAt) || "Unknown"}`
+  ];
+
+  return segments.join(" | ");
+}
+
 export function renderWorkCapsuleOutputPreset(
   capsule: WorkCapsuleV1,
   presetId: WorkCapsuleOutputPresetId
@@ -557,6 +574,11 @@ function renderSummarySection(capsule: WorkCapsuleV1): string {
 function renderOptionalListLines(label: string, value: string | undefined): string[] {
   const compacted = compactString(value);
   return compacted ? [`- ${label}: ${compacted}`] : [];
+}
+
+function renderOptionalCitationSegments(label: string, value: string | undefined): string[] {
+  const compacted = compactString(value);
+  return compacted ? [`${label}: ${compacted}`] : [];
 }
 
 function renderListSection(title: string, lines: string[]): string {
