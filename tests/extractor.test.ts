@@ -219,6 +219,20 @@ describe("conversation extraction", () => {
     );
   });
 
+  it("preserves GFM strikethrough markers around inline content", () => {
+    document.body.innerHTML = `
+      <article data-message-author-role="assistant">
+        <div class="markdown">
+          <p>Keep <s>old text</s>, replace <strike>legacy <code>api</code></strike>, remove <del><a href="https://example.com/docs">old docs</a></del>, and open <a href="https://example.com/old"><del>deprecated docs</del></a>.</p>
+        </div>
+      </article>
+    `;
+
+    expect(collectMessages(document)[0].text).toBe(
+      "Keep ~~old text~~, replace ~~legacy `api`~~, remove ~~[old docs](https://example.com/docs)~~, and open [~~deprecated docs~~](https://example.com/old)."
+    );
+  });
+
   it("preserves checked and unchecked ChatGPT task list markers without UI text", () => {
     document.body.innerHTML = `
       <article data-message-author-role="assistant">
@@ -238,6 +252,50 @@ describe("conversation extraction", () => {
 
     expect(collectMessages(document)[0].text).toBe(
       ["- [x] Done with `npm test`", "- [ ] Review `src/extractor.ts`"].join("\n")
+    );
+  });
+
+  it("preserves nested ordered, unordered, and task list structure", () => {
+    document.body.innerHTML = `
+      <article data-message-author-role="assistant">
+        <div class="markdown prose">
+          <ol>
+            <li>
+              Plan
+              <ul>
+                <li>Draft outline</li>
+                <li>
+                  Validate steps
+                  <ol>
+                    <li>Run <code>npm test</code></li>
+                    <li>Run build</li>
+                  </ol>
+                </li>
+              </ul>
+            </li>
+            <li>
+              Ship
+              <ul>
+                <li><input type="checkbox" checked disabled>Update changelog</li>
+                <li><input type="checkbox" disabled>Tag release</li>
+              </ul>
+            </li>
+          </ol>
+        </div>
+      </article>
+    `;
+
+    expect(collectMessages(document)[0].text).toBe(
+      [
+        "1. Plan",
+        "    - Draft outline",
+        "    - Validate steps",
+        "        1. Run `npm test`",
+        "        2. Run build",
+        "2. Ship",
+        "    - [x] Update changelog",
+        "    - [ ] Tag release"
+      ].join("\n")
     );
   });
 

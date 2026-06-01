@@ -6,7 +6,7 @@ AI Chat Vault is a compact Chrome Manifest V3 extension that exports the visible
 
 - Injects a small exporter panel into ChatGPT pages.
 - Captures the current conversation from the page DOM.
-- Preserves common Markdown structure, including inline code.
+- Preserves common Markdown structure, including inline code, strikethrough, and nested lists.
 - Shows detected turns with role, preview, checkbox, and Select all/Select none controls after capture.
 - Previews Markdown before export.
 - Copies Markdown to the clipboard.

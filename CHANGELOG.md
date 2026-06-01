@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Added Select all and Select none controls for detected-message export selection.
+- Preserved strikethrough and nested list structure in Markdown exports.
 
 ## 0.1.0
 

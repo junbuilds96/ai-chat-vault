@@ -115,6 +115,10 @@ export function normalizeMessageText(element: HTMLElement): string {
     replaceElementWithText(code, markdownInlineCode(elementText(code)));
   });
 
+  clone.querySelectorAll("s, strike, del").forEach((element) => {
+    replaceElementWithText(element, markdownStrikethrough(element));
+  });
+
   clone.querySelectorAll("a[href]").forEach((link) => {
     replaceElementWithText(link, markdownLink(link as HTMLAnchorElement));
   });
@@ -137,11 +141,13 @@ export function normalizeMessageText(element: HTMLElement): string {
     replaceElementWithText(blockquote, `\n\n${markdownQuote(blockquote)}\n\n`);
   });
 
-  clone.querySelectorAll("ol, ul").forEach((list) => {
-    removeWhitespaceSibling(list.previousSibling);
-    removeWhitespaceSibling(list.nextSibling);
-    replaceElementWithText(list, markdownListText(list as HTMLOListElement | HTMLUListElement));
-  });
+  Array.from(clone.querySelectorAll("ol, ul"))
+    .filter((list) => !list.parentElement?.closest("ol, ul"))
+    .forEach((list) => {
+      removeWhitespaceSibling(list.previousSibling);
+      removeWhitespaceSibling(list.nextSibling);
+      replaceElementWithText(list, markdownListText(list as HTMLOListElement | HTMLUListElement));
+    });
 
   return (clone.innerText || clone.textContent || "")
     .replace(/\u00a0/g, " ")
@@ -204,6 +210,18 @@ function markdownLink(link: HTMLAnchorElement): string {
   return `[${escapeMarkdownLinkText(text)}](${href})`;
 }
 
+function markdownStrikethrough(element: Element): string {
+  const clone = element.cloneNode(true) as Element;
+
+  clone.querySelectorAll("a[href]").forEach((link) => {
+    replaceElementWithText(link, markdownLink(link as HTMLAnchorElement));
+  });
+
+  const text = normalizeInlineText(elementText(clone));
+
+  return text ? `~~${text}~~` : "";
+}
+
 function markdownQuote(blockquote: Element): string {
   const text = normalizeBlockText(elementText(blockquote));
   if (!text) {
@@ -238,27 +256,56 @@ function markdownTable(table: HTMLTableElement): string {
   return [header, separator, ...body].map(markdownTableRow).join("\n");
 }
 
-function markdownList(list: HTMLOListElement | HTMLUListElement): string {
+function markdownList(list: HTMLOListElement | HTMLUListElement, depth = 0): string {
   const ordered = list.tagName.toLowerCase() === "ol";
 
   return Array.from(list.children)
     .filter((item): item is HTMLLIElement => item.tagName.toLowerCase() === "li")
-    .map((item, index) => {
-      const taskMarker = markdownTaskMarker(item);
-      const marker = taskMarker ?? (ordered ? `${index + 1}.` : "-");
-      return `${marker} ${normalizeInlineText(elementText(item))}`;
-    })
+    .map((item, index) => markdownListItem(item, ordered, index, depth))
     .join("\n");
 }
 
+function markdownListItem(
+  item: HTMLLIElement,
+  ordered: boolean,
+  index: number,
+  depth: number
+): string {
+  const taskMarker = markdownTaskMarker(item);
+  const marker = taskMarker ?? (ordered ? `${index + 1}.` : "-");
+  const indent = "    ".repeat(depth);
+  const text = markdownListItemText(item);
+  const line = `${indent}${marker}${text ? ` ${text}` : ""}`;
+  const nested = nestedLists(item)
+    .map((list) => markdownList(list, depth + 1))
+    .filter(Boolean);
+
+  return [line, ...nested].join("\n");
+}
+
 function markdownTaskMarker(item: HTMLLIElement): string | null {
-  const checkbox = item.querySelector<HTMLInputElement>("input[type='checkbox']");
+  const checkbox = Array.from(item.querySelectorAll<HTMLInputElement>("input[type='checkbox']")).find(
+    (candidate) => candidate.closest("li") === item
+  );
   if (!checkbox) {
     return null;
   }
 
-  checkbox.remove();
   return checkbox.checked ? "- [x]" : "- [ ]";
+}
+
+function markdownListItemText(item: HTMLLIElement): string {
+  const clone = item.cloneNode(true) as HTMLLIElement;
+
+  clone.querySelectorAll("ol, ul, input[type='checkbox']").forEach((element) => element.remove());
+
+  return normalizeInlineText(elementText(clone));
+}
+
+function nestedLists(item: HTMLLIElement): Array<HTMLOListElement | HTMLUListElement> {
+  return Array.from(item.querySelectorAll<HTMLOListElement | HTMLUListElement>("ol, ul")).filter(
+    (list) => list.closest("li") === item
+  );
 }
 
 function markdownListText(list: HTMLOListElement | HTMLUListElement): string {
