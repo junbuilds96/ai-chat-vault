@@ -8,6 +8,7 @@ import {
 } from "../src/messages";
 import { CONVERSATION_NOTES_STORAGE_KEY, conversationNoteIdentity } from "../src/notes";
 import { PROMPT_SNIPPETS_STORAGE_KEY } from "../src/prompts";
+import { WORK_CAPSULE_INDEX_KEY } from "../src/workCapsules";
 
 const conversation = {
   title: "Popup Test - ChatGPT",
@@ -178,6 +179,32 @@ function promptSelect(): HTMLSelectElement {
   return select;
 }
 
+function workCapsuleSection(): HTMLElement {
+  const section = document.querySelector<HTMLElement>(".acv-work-capsule");
+  if (!section) {
+    throw new Error("Missing work capsule section");
+  }
+  return section;
+}
+
+function workCapsuleFields(): HTMLElement {
+  const fields = document.querySelector<HTMLElement>(".acv-work-capsule-fields");
+  if (!fields) {
+    throw new Error("Missing work capsule fields");
+  }
+  return fields;
+}
+
+function capsuleField(field: string): HTMLInputElement | HTMLTextAreaElement {
+  const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+    `[data-acv-capsule-field="${field}"]`
+  );
+  if (!input) {
+    throw new Error(`Missing capsule ${field} field`);
+  }
+  return input;
+}
+
 function conversationNotesSection(): HTMLElement {
   const section = document.querySelector<HTMLElement>(".acv-conversation-notes");
   if (!section) {
@@ -224,6 +251,23 @@ function bookmarkButtons(action: string): HTMLButtonElement[] {
 
 function status(): string {
   return document.querySelector(".acv-status")?.textContent ?? "";
+}
+
+function savedCapsules(store: Record<string, unknown>) {
+  return Object.keys(store)
+    .filter((key) => key.startsWith("workCapsule:v1:"))
+    .map((key) => store[key]);
+}
+
+function readBlobText(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(String(reader.result ?? "")));
+    reader.addEventListener("error", () => {
+      reject(reader.error ?? new Error("Could not read blob"));
+    });
+    reader.readAsText(blob);
+  });
 }
 
 async function flushAsyncClick(): Promise<void> {
@@ -491,6 +535,240 @@ describe("toolbar popup", () => {
     expect(copied).toContain("## Assistant\n\nAnswer two");
     expect(copied).not.toContain("Question one");
     expect(copied).not.toContain("Follow-up three");
+  });
+
+  it("creates a Work Capsule draft from selected messages only", async () => {
+    await loadPopup();
+    await flushPromptLoad();
+
+    expect(workCapsuleSection().hidden).toBe(true);
+
+    button("capture").click();
+    await flushAsyncClick();
+
+    button("select-none").click();
+    const firstCheckbox = checkboxes()[0];
+    const assistantCheckbox = checkboxes()[1];
+    firstCheckbox.checked = true;
+    firstCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+    assistantCheckbox.checked = true;
+    assistantCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+
+    button("create-capsule").click();
+    await flushAsyncClick();
+
+    expect(workCapsuleSection().hidden).toBe(false);
+    expect(workCapsuleFields().hidden).toBe(false);
+    expect(capsuleField("title").value).toBe("Popup Test - ChatGPT");
+    expect(capsuleField("goal").value).toBe(
+      "Reuse selected context from Popup Test - ChatGPT."
+    );
+    expect(capsuleField("reusableContext").value).toContain("1. User: Question one");
+    expect(capsuleField("reusableContext").value).toContain("2. Assistant: Answer two");
+    expect(capsuleField("reusableContext").value).not.toContain("Follow-up three");
+    expect(status()).toBe("Created capsule draft from 2 selected messages");
+  });
+
+  it("fails Work Capsule creation when no messages are selected", async () => {
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+
+    button("select-none").click();
+    button("create-capsule").click();
+    await flushAsyncClick();
+
+    expect(status()).toBe("Select at least one message to export");
+    expect(workCapsuleFields().hidden).toBe(true);
+  });
+
+  it("keeps Work Capsule edits before save", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+    button("create-capsule").click();
+    await flushAsyncClick();
+
+    capsuleField("title").value = "Edited Capsule";
+    capsuleField("title").dispatchEvent(new Event("input", { bubbles: true }));
+    capsuleField("goal").value = "Carry edited context into the next session.";
+    capsuleField("goal").dispatchEvent(new Event("input", { bubbles: true }));
+    capsuleField("decisions").value = "Keep the popup local-only";
+    capsuleField("decisions").dispatchEvent(new Event("input", { bubbles: true }));
+    capsuleField("nextActions").value = "Review this capsule tomorrow";
+    capsuleField("nextActions").dispatchEvent(new Event("input", { bubbles: true }));
+
+    button("copy-capsule-markdown").click();
+    await flushAsyncClick();
+
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain("Edited Capsule");
+    expect(copied).toContain("Carry edited context into the next session.");
+    expect(copied).toContain("- Keep the popup local-only");
+    expect(copied).toContain("- [todo] @user Review this capsule tomorrow");
+    expect(status()).toBe("Copied capsule Markdown to clipboard");
+  });
+
+  it("saves a Work Capsule draft to local storage", async () => {
+    const chromeMock = installChromeMock();
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+
+    button("select-none").click();
+    const assistantCheckbox = checkboxes()[1];
+    assistantCheckbox.checked = true;
+    assistantCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+
+    button("create-capsule").click();
+    await flushAsyncClick();
+    capsuleField("title").value = "Assistant Answer Capsule";
+    capsuleField("title").dispatchEvent(new Event("input", { bubbles: true }));
+    capsuleField("facts").value = "The assistant answered the first question.";
+    capsuleField("facts").dispatchEvent(new Event("input", { bubbles: true }));
+
+    button("save-capsule").click();
+    await flushAsyncClick();
+
+    const saved = savedCapsules(chromeMock.store)[0] as {
+      title: string;
+      facts: Array<{ text: string }>;
+      source: { selectedTurnIds: string[] };
+      excerpts: Array<{ turnId: string; role: string; text: string }>;
+    };
+    expect(saved).toMatchObject({
+      title: "Assistant Answer Capsule",
+      facts: [{ id: "fact-1", text: "The assistant answered the first question." }],
+      source: { selectedTurnIds: ["message-2"] },
+      excerpts: [{ id: "excerpt-2", turnId: "message-2", role: "assistant", text: "Answer two" }]
+    });
+    expect(JSON.stringify(saved)).not.toContain("Question one");
+    expect(JSON.stringify(saved)).not.toContain("Follow-up three");
+    expect(chromeMock.store[WORK_CAPSULE_INDEX_KEY]).toEqual([
+      expect.objectContaining({
+        id: expect.any(String),
+        title: "Assistant Answer Capsule",
+        sourceTitle: "Popup Test - ChatGPT",
+        sourceUrl: "https://chatgpt.com/c/test"
+      })
+    ]);
+    expect(status()).toBe("Saved capsule locally");
+  });
+
+  it("copies Work Capsule context and Markdown", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+    button("create-capsule").click();
+    await flushAsyncClick();
+
+    button("copy-capsule-context").click();
+    await flushAsyncClick();
+    expect(writeText.mock.calls[0][0]).toContain("Title: Popup Test - ChatGPT");
+    expect(writeText.mock.calls[0][0]).toContain("- message-1 (user): Question one");
+    expect(writeText.mock.calls[0][0]).toContain("- message-2 (assistant): Answer two");
+    expect(status()).toBe("Copied capsule context to clipboard");
+
+    button("copy-capsule-markdown").click();
+    await flushAsyncClick();
+    expect(writeText.mock.calls[1][0]).toContain("## Source");
+    expect(writeText.mock.calls[1][0]).toContain(
+      "- Selected turn IDs: message-1, message-2, message-3"
+    );
+    expect(writeText.mock.calls[1][0]).toContain(
+      "- message-3 (user): Follow-up three"
+    );
+    expect(status()).toBe("Copied capsule Markdown to clipboard");
+  });
+
+  it("downloads Work Capsule Markdown", async () => {
+    const createObjectURL = vi.fn(() => "blob:work-capsule");
+    const revokeObjectURL = vi.fn();
+    const click = vi.fn();
+    const originalCreateElement = document.createElement.bind(document);
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURL
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURL
+    });
+    vi.spyOn(document, "createElement").mockImplementation((tagName, options) => {
+      const element = originalCreateElement(tagName, options);
+      if (tagName.toLowerCase() === "a") {
+        element.click = click;
+      }
+      return element;
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+    button("create-capsule").click();
+    await flushAsyncClick();
+    capsuleField("title").value = "Capsule Download";
+    capsuleField("title").dispatchEvent(new Event("input", { bubbles: true }));
+
+    button("download-capsule").click();
+    await flushAsyncClick();
+
+    const [[blob]] = createObjectURL.mock.calls as unknown as [[Blob]];
+    await expect(readBlobText(blob)).resolves.toContain("Capsule Download");
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:work-capsule");
+    expect(status()).toBe("Downloaded capsule Markdown file");
+  });
+
+  it("does not call network APIs during the Work Capsule popup loop", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText }
+    });
+    const fetchMock = vi.fn(() => {
+      throw new Error("network unavailable");
+    });
+    const xhrMock = vi.fn(() => {
+      throw new Error("network unavailable");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("XMLHttpRequest", xhrMock);
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+    button("create-capsule").click();
+    await flushAsyncClick();
+    button("copy-capsule-context").click();
+    await flushAsyncClick();
+    button("copy-capsule-markdown").click();
+    await flushAsyncClick();
+    button("save-capsule").click();
+    await flushAsyncClick();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(xhrMock).not.toHaveBeenCalled();
   });
 
   it("shows a clear unsupported-tab error before messaging", async () => {

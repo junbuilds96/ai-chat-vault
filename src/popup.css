@@ -64,6 +64,17 @@ body {
   display: none;
 }
 
+.acv-work-capsule {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px 10px;
+}
+
+.acv-work-capsule[hidden],
+.acv-work-capsule-fields[hidden] {
+  display: none;
+}
+
 .acv-section-heading {
   display: flex;
   align-items: baseline;
@@ -315,6 +326,50 @@ textarea {
 
 .acv-conversation-bookmarks > button {
   min-height: 28px;
+}
+
+.acv-work-capsule > button {
+  min-height: 28px;
+}
+
+.acv-work-capsule-fields {
+  display: grid;
+  gap: 8px;
+}
+
+.acv-work-capsule-fields label {
+  display: grid;
+  gap: 4px;
+}
+
+.acv-work-capsule-fields label span {
+  color: #334155;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.acv-work-capsule-fields input {
+  margin: 0;
+}
+
+.acv-work-capsule-fields textarea {
+  width: 100%;
+  min-height: 58px;
+  max-height: 120px;
+  margin: 0;
+  font: inherit;
+}
+
+.acv-work-capsule-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.acv-work-capsule-actions button {
+  min-height: 28px;
+  padding: 0 7px;
+  font-size: 12px;
 }
 
 .acv-bookmark-list {

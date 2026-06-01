@@ -11,7 +11,7 @@ AI Chat Vault is a compact Chrome Manifest V3 toolkit for turning ChatGPT conver
 - Adds a Message Navigator after capture for local role/text filtering, turn counts, and quick focus in the captured list.
 - Adds Conversation Notes after capture for private per-conversation notes stored locally by conversation identity.
 - Adds Conversation Bookmarks after capture for local saved conversation links with copy/delete controls.
-- Includes Work Capsule schema, Markdown rendering, and local storage groundwork for reusable chat context.
+- Creates editable Work Capsules from selected turns, with local save, copy, and download actions.
 - Previews Markdown before export.
 - Copies Markdown to the clipboard.
 - Downloads a `.md` file locally with a safe, readable filename.
@@ -45,7 +45,9 @@ The popup includes a compact **Prompt Library** with default snippets such as `/
 
 ## Work Capsules
 
-The Work Capsule foundation exists as local schema, validation, Markdown rendering, and `chrome.storage.local` storage groundwork for reusable chat context. It is not wired into the popup UI loop yet.
+After capture, **Work Capsule** appears with a **Create Capsule** action. Check the messages you want in the capsule, then create a local draft with structured editable fields for title, goal, reusable context, decisions, constraints, facts, open questions, next actions, and artifacts. The draft records `selectedTurnIds` such as `message-1` and stores selected excerpts only for checked messages, not the full raw transcript.
+
+Use **Save capsule** to persist the draft in `chrome.storage.local`, **Copy context** for a compact reusable context block, **Copy Markdown** for the rendered capsule, or **Download capsule** for a local `.md` file. If no messages are checked, capsule creation shows the same selection error as export: `Select at least one message to export`. The loop is deterministic and local-only; it does not call a backend, cloud service, analytics endpoint, remote LLM, `fetch`, or `XMLHttpRequest`.
 
 ## Development
 

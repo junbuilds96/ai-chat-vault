@@ -28,6 +28,15 @@ import {
   savePromptSnippets,
   type PromptSnippet
 } from "./prompts";
+import {
+  WORK_CAPSULE_SCHEMA_VERSION,
+  createWorkCapsule,
+  renderWorkCapsuleMarkdown,
+  type WorkCapsuleAction,
+  type WorkCapsuleArtifact,
+  type WorkCapsuleItem,
+  type WorkCapsuleV1
+} from "./workCapsules";
 
 type MessageNavigatorRole = "all" | Speaker;
 
@@ -44,6 +53,7 @@ interface PopupState {
   conversationNote: string;
   conversationNoteIdentity: string;
   bookmarks: ConversationBookmark[];
+  workCapsuleDraft: WorkCapsuleV1 | null;
 }
 
 const state: PopupState = {
@@ -58,7 +68,8 @@ const state: PopupState = {
   focusedMessageIndex: null,
   conversationNote: "",
   conversationNoteIdentity: "",
-  bookmarks: []
+  bookmarks: [],
+  workCapsuleDraft: null
 };
 
 const NAVIGATOR_ROLES: MessageNavigatorRole[] = ["all", "user", "assistant", "system"];
@@ -122,6 +133,57 @@ function initPopup(): void {
         </div>
         <button type="button" data-acv-action="save-bookmark">Save bookmark</button>
         <div class="acv-bookmark-list" aria-label="Saved conversation bookmarks"></div>
+      </section>
+      <section class="acv-work-capsule" aria-label="Work Capsule" hidden>
+        <div class="acv-section-heading">
+          <strong>Work Capsule</strong>
+          <span data-acv-work-capsule-context>Local draft</span>
+        </div>
+        <button type="button" data-acv-action="create-capsule">Create Capsule</button>
+        <div class="acv-work-capsule-fields" hidden>
+          <label>
+            <span>Title</span>
+            <input type="text" data-acv-capsule-field="title" aria-label="Work capsule title" />
+          </label>
+          <label>
+            <span>Goal</span>
+            <textarea data-acv-capsule-field="goal" aria-label="Work capsule goal"></textarea>
+          </label>
+          <label>
+            <span>Reusable context</span>
+            <textarea data-acv-capsule-field="reusableContext" aria-label="Work capsule reusable context"></textarea>
+          </label>
+          <label>
+            <span>Decisions</span>
+            <textarea data-acv-capsule-field="decisions" aria-label="Work capsule decisions"></textarea>
+          </label>
+          <label>
+            <span>Constraints</span>
+            <textarea data-acv-capsule-field="constraints" aria-label="Work capsule constraints"></textarea>
+          </label>
+          <label>
+            <span>Facts</span>
+            <textarea data-acv-capsule-field="facts" aria-label="Work capsule facts"></textarea>
+          </label>
+          <label>
+            <span>Open questions</span>
+            <textarea data-acv-capsule-field="openQuestions" aria-label="Work capsule open questions"></textarea>
+          </label>
+          <label>
+            <span>Next actions</span>
+            <textarea data-acv-capsule-field="nextActions" aria-label="Work capsule next actions"></textarea>
+          </label>
+          <label>
+            <span>Artifacts</span>
+            <textarea data-acv-capsule-field="artifacts" aria-label="Work capsule artifacts"></textarea>
+          </label>
+          <div class="acv-work-capsule-actions">
+            <button type="button" data-acv-action="save-capsule">Save capsule</button>
+            <button type="button" data-acv-action="copy-capsule-context">Copy context</button>
+            <button type="button" data-acv-action="copy-capsule-markdown">Copy Markdown</button>
+            <button type="button" data-acv-action="download-capsule">Download capsule</button>
+          </div>
+        </div>
       </section>
       <section class="acv-message-panel" hidden>
         <section class="acv-message-navigator" aria-label="Message Navigator">
@@ -195,6 +257,31 @@ async function handlePopupClick(event: MouseEvent): Promise<void> {
       return;
     }
 
+    if (action === "create-capsule") {
+      createCapsuleDraftFromSelection();
+      return;
+    }
+
+    if (action === "save-capsule") {
+      await saveCurrentWorkCapsule();
+      return;
+    }
+
+    if (action === "copy-capsule-context") {
+      await copyCurrentWorkCapsuleContext();
+      return;
+    }
+
+    if (action === "copy-capsule-markdown") {
+      await copyCurrentWorkCapsuleMarkdown();
+      return;
+    }
+
+    if (action === "download-capsule") {
+      downloadCurrentWorkCapsule();
+      return;
+    }
+
     if (action === "copy-bookmark") {
       await copyConversationBookmark(button.dataset.acvBookmarkId ?? "");
       return;
@@ -263,6 +350,15 @@ function handlePopupInput(event: Event): void {
     return;
   }
 
+  const capsuleField = (event.target as HTMLElement).closest<
+    HTMLInputElement | HTMLTextAreaElement
+  >("[data-acv-capsule-field]");
+  if (capsuleField) {
+    updateWorkCapsuleDraftFromFields();
+    setStatus("Unsaved capsule changes");
+    return;
+  }
+
   const note = (event.target as HTMLElement).closest<HTMLTextAreaElement>(
     "textarea[data-acv-conversation-note]"
   );
@@ -312,6 +408,7 @@ function handlePopupChange(event: Event): void {
   }
 
   updatePreviewFromSelection();
+  renderWorkCapsuleSection();
 }
 
 async function loadPromptLibrary(): Promise<void> {
@@ -441,6 +538,7 @@ async function updateCapturedConversation(conversation: ConversationExport): Pro
   state.navigatorRole = "all";
   state.focusedMessageIndex = null;
   state.conversationNoteIdentity = conversationNoteIdentity(conversation);
+  state.workCapsuleDraft = null;
   const [conversationNote, bookmarks] = await Promise.all([
     loadConversationNote(conversation),
     loadConversationBookmarks()
@@ -450,6 +548,7 @@ async function updateCapturedConversation(conversation: ConversationExport): Pro
   preview().value = state.markdown;
   renderConversationNotes();
   renderConversationBookmarks();
+  renderWorkCapsuleSection();
   renderMessageList(conversation.messages);
   renderMessageNavigator();
   setStatus(`Captured ${conversation.messages.length} message${conversation.messages.length === 1 ? "" : "s"}`);
@@ -497,14 +596,18 @@ async function insertSelectedPromptIntoChatGpt(): Promise<void> {
 
 function downloadMarkdown(): void {
   const markdown = selectedMarkdown();
-  const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+  downloadTextFile(markdown, markdownFilename(state.title));
+  setStatus("Downloaded Markdown file");
+}
+
+function downloadTextFile(text: string, filename: string): void {
+  const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = markdownFilename(state.title);
+  anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
-  setStatus("Downloaded Markdown file");
 }
 
 function selectedMarkdown(): string {
@@ -557,6 +660,7 @@ function updateMessageSelection(mode: "all" | "none"): void {
   );
   syncMessageCheckboxes();
   updatePreviewFromSelection();
+  renderWorkCapsuleSection();
 }
 
 function renderMessageList(messages: ConversationExport["messages"]): void {
@@ -854,6 +958,256 @@ function renderConversationBookmarks(): void {
   });
 }
 
+function createCapsuleDraftFromSelection(): void {
+  const conversation = selectedConversation();
+  const selectedIndexes = sortedSelectedMessageIndexes();
+  const now = new Date().toISOString();
+
+  state.workCapsuleDraft = {
+    schemaVersion: WORK_CAPSULE_SCHEMA_VERSION,
+    id: uniqueWorkCapsuleId(),
+    title: conversation.title || "ChatGPT Work Capsule",
+    goal: defaultCapsuleGoal(conversation),
+    reusableContext: selectedIndexes.map((messageIndex) => {
+      const message = state.conversation?.messages[messageIndex];
+      return message
+        ? `${messageIndex + 1}. ${roleLabel(message.speaker)}: ${shortMessagePreview(message, 120)}`
+        : `${messageIndex + 1}. Selected message`;
+    }),
+    decisions: [],
+    constraints: [],
+    facts: [],
+    openQuestions: [],
+    nextActions: [],
+    artifacts: [],
+    source: {
+      provider: "chatgpt",
+      title: conversation.title,
+      url: conversation.url,
+      selectedTurnIds: selectedIndexes.map(turnIdForMessageIndex)
+    },
+    sourceExcerptPolicy: "selected-excerpts",
+    excerpts: selectedIndexes.map((messageIndex) => {
+      const message = state.conversation?.messages[messageIndex];
+      return {
+        id: `excerpt-${messageIndex + 1}`,
+        turnId: turnIdForMessageIndex(messageIndex),
+        role: message?.speaker ?? "unknown",
+        text: message?.text ?? ""
+      };
+    }),
+    createdAt: now,
+    updatedAt: now
+  };
+
+  renderWorkCapsuleSection();
+  setStatus(`Created capsule draft from ${conversation.messages.length} selected message${conversation.messages.length === 1 ? "" : "s"}`);
+}
+
+async function saveCurrentWorkCapsule(): Promise<void> {
+  const capsule = currentWorkCapsuleDraft();
+  await createWorkCapsule(capsule);
+  setStatus("Saved capsule locally");
+}
+
+async function copyCurrentWorkCapsuleContext(): Promise<void> {
+  const capsule = currentWorkCapsuleDraft();
+  await navigator.clipboard.writeText(capsuleContextText(capsule));
+  setStatus("Copied capsule context to clipboard");
+}
+
+async function copyCurrentWorkCapsuleMarkdown(): Promise<void> {
+  const capsule = currentWorkCapsuleDraft();
+  await navigator.clipboard.writeText(renderWorkCapsuleMarkdown(capsule));
+  setStatus("Copied capsule Markdown to clipboard");
+}
+
+function downloadCurrentWorkCapsule(): void {
+  const capsule = currentWorkCapsuleDraft();
+  downloadTextFile(
+    renderWorkCapsuleMarkdown(capsule),
+    markdownFilename(capsule.title || "work-capsule")
+  );
+  setStatus("Downloaded capsule Markdown file");
+}
+
+function currentWorkCapsuleDraft(): WorkCapsuleV1 {
+  updateWorkCapsuleDraftFromFields();
+  if (!state.workCapsuleDraft) {
+    throw new Error("Create a capsule draft before using capsule actions");
+  }
+
+  return state.workCapsuleDraft;
+}
+
+function updateWorkCapsuleDraftFromFields(): void {
+  const draft = state.workCapsuleDraft;
+  if (!draft) {
+    return;
+  }
+
+  state.workCapsuleDraft = {
+    ...draft,
+    title: stringFieldValue("title") || "Untitled Work Capsule",
+    goal: stringFieldValue("goal") || "Capture reusable context from selected messages.",
+    reusableContext: textAreaLines("reusableContext"),
+    decisions: workCapsuleItems("decisions", "decision"),
+    constraints: workCapsuleItems("constraints", "constraint"),
+    facts: workCapsuleItems("facts", "fact"),
+    openQuestions: workCapsuleItems("openQuestions", "question"),
+    nextActions: workCapsuleActions(),
+    artifacts: workCapsuleArtifacts(),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function renderWorkCapsuleSection(): void {
+  const section = workCapsuleSection();
+  const fields = workCapsuleFields();
+  const context = workCapsuleContext();
+  const draft = state.workCapsuleDraft;
+
+  section.hidden = !state.conversation;
+  fields.hidden = !draft;
+
+  if (!state.conversation) {
+    context.textContent = "Local draft";
+    return;
+  }
+
+  const selectedCount = state.selectedMessageIndexes.size;
+  context.textContent = draft
+    ? `${draft.source.selectedTurnIds.length} selected turns`
+    : `${selectedCount} selected turn${selectedCount === 1 ? "" : "s"}`;
+
+  if (!draft) {
+    return;
+  }
+
+  setCapsuleFieldValue("title", draft.title);
+  setCapsuleFieldValue("goal", draft.goal);
+  setCapsuleFieldValue("reusableContext", draft.reusableContext.join("\n"));
+  setCapsuleFieldValue("decisions", draft.decisions.map((item) => item.text).join("\n"));
+  setCapsuleFieldValue("constraints", draft.constraints.map((item) => item.text).join("\n"));
+  setCapsuleFieldValue("facts", draft.facts.map((item) => item.text).join("\n"));
+  setCapsuleFieldValue("openQuestions", draft.openQuestions.map((item) => item.text).join("\n"));
+  setCapsuleFieldValue("nextActions", draft.nextActions.map((action) => action.text).join("\n"));
+  setCapsuleFieldValue(
+    "artifacts",
+    draft.artifacts.map(artifactMarkdownInput).join("\n\n")
+  );
+}
+
+function capsuleContextText(capsule: WorkCapsuleV1): string {
+  return [
+    `Title: ${capsule.title}`,
+    `Goal: ${capsule.goal}`,
+    "",
+    "Reusable Context:",
+    capsule.reusableContext.length > 0
+      ? capsule.reusableContext.map((item) => `- ${item}`).join("\n")
+      : "- None",
+    "",
+    "Selected Excerpts:",
+    capsule.excerpts.length > 0
+      ? capsule.excerpts
+        .map((excerpt) => `- ${excerpt.turnId} (${excerpt.role}): ${excerpt.text}`)
+        .join("\n")
+      : "- None"
+  ].join("\n");
+}
+
+function artifactMarkdownInput(artifact: WorkCapsuleArtifact): string {
+  const body = artifact.body.trim();
+  return body ? `${artifact.title}\n${body}` : artifact.title;
+}
+
+function workCapsuleItems(field: string, prefix: string): WorkCapsuleItem[] {
+  return textAreaLines(field).map((text, index) => ({
+    id: `${prefix}-${index + 1}`,
+    text
+  }));
+}
+
+function workCapsuleActions(): WorkCapsuleAction[] {
+  return textAreaLines("nextActions").map((text, index) => ({
+    id: `action-${index + 1}`,
+    text,
+    status: "todo",
+    owner: "user"
+  }));
+}
+
+function workCapsuleArtifacts(): WorkCapsuleArtifact[] {
+  return splitTextBlocks(stringFieldValue("artifacts")).map((block, index) => {
+    const lines = block.split(/\r?\n/);
+    const title = compactFieldLine(lines[0]) || `Artifact ${index + 1}`;
+    const body = lines.slice(1).join("\n").trim() || title;
+
+    return {
+      id: `artifact-${index + 1}`,
+      type: "other",
+      title,
+      body
+    };
+  });
+}
+
+function textAreaLines(field: string): string[] {
+  return stringFieldValue(field)
+    .split(/\r?\n/)
+    .map(compactFieldLine)
+    .filter(Boolean);
+}
+
+function splitTextBlocks(value: string): string[] {
+  return value
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+}
+
+function stringFieldValue(field: string): string {
+  return workCapsuleField(field)?.value.trim() ?? "";
+}
+
+function setCapsuleFieldValue(field: string, value: string): void {
+  const input = workCapsuleField(field);
+  if (input) {
+    input.value = value;
+  }
+}
+
+function workCapsuleField(field: string): HTMLInputElement | HTMLTextAreaElement | null {
+  return document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+    `[data-acv-capsule-field="${field}"]`
+  );
+}
+
+function sortedSelectedMessageIndexes(): number[] {
+  return Array.from(state.selectedMessageIndexes).sort((first, second) => first - second);
+}
+
+function turnIdForMessageIndex(messageIndex: number): string {
+  return `message-${messageIndex + 1}`;
+}
+
+function roleLabel(speaker: Speaker): string {
+  return speaker.charAt(0).toUpperCase() + speaker.slice(1);
+}
+
+function defaultCapsuleGoal(conversation: ConversationExport): string {
+  return `Reuse selected context from ${conversation.title || "this ChatGPT conversation"}.`;
+}
+
+function uniqueWorkCapsuleId(): string {
+  return `capsule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function compactFieldLine(value: string): string {
+  return value.trim().replace(/^[-*]\s+/, "").replace(/\s+/g, " ");
+}
+
 function shortConversationContext(conversation: ConversationExport): string {
   const label = conversation.title.trim() || conversation.url.trim() || "Current conversation";
   return label.length > 38 ? `${label.slice(0, 35)}...` : label;
@@ -1111,6 +1465,30 @@ function conversationBookmarkList(): HTMLDivElement {
     throw new Error("Conversation bookmark list is unavailable");
   }
   return list;
+}
+
+function workCapsuleSection(): HTMLElement {
+  const section = document.querySelector<HTMLElement>(".acv-work-capsule");
+  if (!section) {
+    throw new Error("Work capsule section is unavailable");
+  }
+  return section;
+}
+
+function workCapsuleFields(): HTMLDivElement {
+  const fields = document.querySelector<HTMLDivElement>(".acv-work-capsule-fields");
+  if (!fields) {
+    throw new Error("Work capsule fields are unavailable");
+  }
+  return fields;
+}
+
+function workCapsuleContext(): HTMLSpanElement {
+  const context = document.querySelector<HTMLSpanElement>("[data-acv-work-capsule-context]");
+  if (!context) {
+    throw new Error("Work capsule context is unavailable");
+  }
+  return context;
 }
 
 function messagePanel(): HTMLDivElement {
