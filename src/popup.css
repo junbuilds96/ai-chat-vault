@@ -367,6 +367,11 @@ textarea {
   padding: 0 8px;
 }
 
+.acv-work-capsule-recent-actions {
+  display: flex;
+  gap: 4px;
+}
+
 .acv-work-capsule-fields {
   display: grid;
   gap: 8px;

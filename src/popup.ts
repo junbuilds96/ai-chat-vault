@@ -31,6 +31,7 @@ import {
 import {
   WORK_CAPSULE_SCHEMA_VERSION,
   createWorkCapsule,
+  deleteWorkCapsule,
   findMostRecentWorkCapsuleBySourceUrl,
   renderWorkCapsuleMarkdown,
   type WorkCapsuleAction,
@@ -186,6 +187,7 @@ function initPopup(): void {
             <button type="button" data-acv-action="copy-capsule-context">Copy context</button>
             <button type="button" data-acv-action="copy-capsule-markdown">Copy Markdown</button>
             <button type="button" data-acv-action="download-capsule">Download capsule</button>
+            <button type="button" data-acv-action="delete-capsule" data-acv-capsule-draft-action="true" hidden>Delete capsule</button>
           </div>
         </div>
       </section>
@@ -268,6 +270,11 @@ async function handlePopupClick(event: MouseEvent): Promise<void> {
 
     if (action === "reopen-capsule") {
       await reopenRecentWorkCapsule();
+      return;
+    }
+
+    if (action === "delete-capsule") {
+      await deleteCurrentWorkCapsule();
       return;
     }
 
@@ -1034,6 +1041,35 @@ function reopenRecentWorkCapsule(): void {
   setStatus("Reopened saved capsule");
 }
 
+async function deleteCurrentWorkCapsule(): Promise<void> {
+  const capsule = state.workCapsuleDraft ?? state.recentWorkCapsule;
+  if (!capsule) {
+    throw new Error("No saved capsule is available for this conversation");
+  }
+
+  const savedCapsule = state.recentWorkCapsule;
+  if (!savedCapsule || savedCapsule.id !== capsule.id) {
+    throw new Error("Save the capsule before deleting it");
+  }
+
+  const confirmed = window.confirm(
+    `Delete saved Work Capsule "${savedCapsule.title}" from this browser?`
+  );
+  if (!confirmed) {
+    setStatus("Capsule delete canceled");
+    return;
+  }
+
+  await deleteWorkCapsule(savedCapsule.id);
+  state.recentWorkCapsule = null;
+  if (state.workCapsuleDraft?.id === savedCapsule.id) {
+    state.workCapsuleDraft = null;
+  }
+
+  renderWorkCapsuleSection();
+  setStatus("Deleted saved capsule locally");
+}
+
 async function copyCurrentWorkCapsuleContext(): Promise<void> {
   const capsule = currentWorkCapsuleDraft();
   await navigator.clipboard.writeText(capsuleContextText(capsule));
@@ -1091,11 +1127,13 @@ function renderWorkCapsuleSection(): void {
   const context = workCapsuleContext();
   const recent = workCapsuleRecent();
   const draft = state.workCapsuleDraft;
+  const deleteButton = workCapsuleDeleteButton();
 
   section.hidden = !state.conversation;
   fields.hidden = !draft;
   recent.hidden = !state.conversation || !state.recentWorkCapsule || !!draft;
   recent.textContent = "";
+  deleteButton.hidden = !draft || state.recentWorkCapsule?.id !== draft.id;
 
   if (!state.conversation) {
     context.textContent = "Local draft";
@@ -1146,8 +1184,17 @@ function renderRecentWorkCapsule(capsule: WorkCapsuleV1, container: HTMLDivEleme
   button.dataset.acvAction = "reopen-capsule";
   button.textContent = "Reopen";
 
+  const deleteButton = document.createElement("button");
+  deleteButton.type = "button";
+  deleteButton.dataset.acvAction = "delete-capsule";
+  deleteButton.textContent = "Delete";
+
+  const actions = document.createElement("div");
+  actions.className = "acv-work-capsule-recent-actions";
+  actions.append(button, deleteButton);
+
   details.append(title, updated);
-  container.append(details, button);
+  container.append(details, actions);
 }
 
 function capsuleContextText(capsule: WorkCapsuleV1): string {
@@ -1234,6 +1281,17 @@ function workCapsuleField(field: string): HTMLInputElement | HTMLTextAreaElement
   return document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
     `[data-acv-capsule-field="${field}"]`
   );
+}
+
+function workCapsuleDeleteButton(): HTMLButtonElement {
+  const button = document.querySelector<HTMLButtonElement>(
+    'button[data-acv-action="delete-capsule"][data-acv-capsule-draft-action="true"]'
+  );
+  if (!button) {
+    throw new Error("Work capsule delete button is unavailable");
+  }
+
+  return button;
 }
 
 function sortedSelectedMessageIndexes(): number[] {

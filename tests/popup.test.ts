@@ -112,16 +112,20 @@ function installChromeMock(
     Object.assign(store, items);
     callback();
   });
+  const remove = vi.fn((key, callback) => {
+    delete store[key];
+    callback();
+  });
 
   vi.stubGlobal("chrome", {
     runtime,
     storage: {
-      local: { get, set }
+      local: { get, remove, set }
     },
     tabs: { query, sendMessage }
   });
 
-  return { get, promptSnippets, query, runtime, sendMessage, set, store };
+  return { get, promptSnippets, query, remove, runtime, sendMessage, set, store };
 }
 
 function installChromeMockWithSendMessageError(message: string) {
@@ -143,6 +147,7 @@ function installChromeMockWithSendMessageError(message: string) {
     storage: {
       local: {
         get: vi.fn((key, callback) => callback({ [key]: [] })),
+        remove: vi.fn((_key, callback) => callback()),
         set: vi.fn((_items, callback) => callback())
       }
     },
@@ -750,7 +755,7 @@ describe("toolbar popup", () => {
     expect(workCapsuleFields().hidden).toBe(true);
     expect(workCapsuleRecent().hidden).toBe(false);
     expect(workCapsuleRecent().textContent).toBe(
-      "Saved Retrieval CapsuleUpdated 2026-06-01T02:00:00.000ZReopen"
+      "Saved Retrieval CapsuleUpdated 2026-06-01T02:00:00.000ZReopenDelete"
     );
     expect(document.querySelector("[data-acv-work-capsule-context]")?.textContent).toBe(
       "Recent capsule available"
@@ -773,6 +778,124 @@ describe("toolbar popup", () => {
       "1 selected turn"
     );
     expect(status()).toBe("Reopened saved capsule");
+  });
+
+  it("shows a delete action for the recent saved Work Capsule", async () => {
+    const saved = workCapsule();
+    installChromeMock("https://chatgpt.com/c/test?model=gpt-5", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: saved.id,
+          title: saved.title,
+          goal: saved.goal,
+          sourceTitle: saved.source.title,
+          sourceUrl: saved.source.url,
+          createdAt: saved.createdAt,
+          updatedAt: saved.updatedAt
+        }
+      ],
+      [workCapsuleBodyKey(saved.id)]: saved
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+
+    const recentDeleteButton = workCapsuleRecent().querySelector<HTMLButtonElement>(
+      'button[data-acv-action="delete-capsule"]'
+    );
+    const draftDeleteButton = workCapsuleFields().querySelector<HTMLButtonElement>(
+      'button[data-acv-action="delete-capsule"]'
+    );
+
+    expect(recentDeleteButton?.textContent).toBe("Delete");
+    expect(draftDeleteButton?.hidden).toBe(true);
+  });
+
+  it("keeps a recent saved Work Capsule when delete confirmation is canceled", async () => {
+    const saved = workCapsule();
+    const confirm = vi.fn(() => false);
+    vi.stubGlobal("confirm", confirm);
+    const chromeMock = installChromeMock("https://chatgpt.com/c/test?model=gpt-5", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: saved.id,
+          title: saved.title,
+          goal: saved.goal,
+          sourceTitle: saved.source.title,
+          sourceUrl: saved.source.url,
+          createdAt: saved.createdAt,
+          updatedAt: saved.updatedAt
+        }
+      ],
+      [workCapsuleBodyKey(saved.id)]: saved
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+
+    button("delete-capsule").click();
+    await flushAsyncClick();
+
+    expect(confirm).toHaveBeenCalledWith(
+      'Delete saved Work Capsule "Saved Retrieval Capsule" from this browser?'
+    );
+    expect(chromeMock.store[workCapsuleBodyKey(saved.id)]).toEqual(saved);
+    expect(chromeMock.store[WORK_CAPSULE_INDEX_KEY]).toHaveLength(1);
+    expect(chromeMock.remove).not.toHaveBeenCalled();
+    expect(workCapsuleRecent().hidden).toBe(false);
+    expect(workCapsuleRecent().textContent).toBe(
+      "Saved Retrieval CapsuleUpdated 2026-06-01T02:00:00.000ZReopenDelete"
+    );
+    expect(status()).toBe("Capsule delete canceled");
+  });
+
+  it("deletes an accepted recent saved Work Capsule from local storage and UI state", async () => {
+    const saved = workCapsule();
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirm);
+    const chromeMock = installChromeMock("https://chatgpt.com/c/test?model=gpt-5", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: saved.id,
+          title: saved.title,
+          goal: saved.goal,
+          sourceTitle: saved.source.title,
+          sourceUrl: saved.source.url,
+          createdAt: saved.createdAt,
+          updatedAt: saved.updatedAt
+        }
+      ],
+      [workCapsuleBodyKey(saved.id)]: saved
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+    button("reopen-capsule").click();
+    await flushAsyncClick();
+
+    expect(workCapsuleFields().hidden).toBe(false);
+
+    button("delete-capsule").click();
+    await flushAsyncClick();
+
+    expect(confirm).toHaveBeenCalledWith(
+      'Delete saved Work Capsule "Saved Retrieval Capsule" from this browser?'
+    );
+    expect(chromeMock.store[WORK_CAPSULE_INDEX_KEY]).toEqual([]);
+    expect(chromeMock.store[workCapsuleBodyKey(saved.id)]).toBeUndefined();
+    expect(chromeMock.remove).toHaveBeenCalledWith(workCapsuleBodyKey(saved.id), expect.any(Function));
+    expect(workCapsuleRecent().hidden).toBe(true);
+    expect(workCapsuleFields().hidden).toBe(true);
+    expect(document.querySelector("[data-acv-work-capsule-context]")?.textContent).toBe(
+      "3 selected turns"
+    );
+    expect(status()).toBe("Deleted saved capsule locally");
   });
 
   it("copies Work Capsule context and Markdown", async () => {
@@ -851,10 +974,12 @@ describe("toolbar popup", () => {
 
   it("does not call network APIs during the Work Capsule popup loop", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
+    const confirm = vi.fn(() => true);
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: { writeText }
     });
+    vi.stubGlobal("confirm", confirm);
     const fetchMock = vi.fn(() => {
       throw new Error("network unavailable");
     });
@@ -875,6 +1000,8 @@ describe("toolbar popup", () => {
     button("copy-capsule-markdown").click();
     await flushAsyncClick();
     button("save-capsule").click();
+    await flushAsyncClick();
+    button("delete-capsule").click();
     await flushAsyncClick();
 
     expect(fetchMock).not.toHaveBeenCalled();
