@@ -1,6 +1,6 @@
 # AI Chat Vault
 
-AI Chat Vault is a compact Chrome Manifest V3 toolkit for local-first ChatGPT workflows. It opens from the Chrome toolbar, runs locally on `chatgpt.com` and `chat.openai.com`, and keeps Markdown export plus prompt snippets inside the browser.
+AI Chat Vault is a compact Chrome Manifest V3 toolkit for turning ChatGPT conversations into local, reusable work memory. It opens from the Chrome toolbar, runs locally on `chatgpt.com` and `chat.openai.com`, and keeps capture, Markdown export, prompt snippets, notes, and bookmarks inside the browser.
 
 ## Features
 
@@ -17,6 +17,10 @@ AI Chat Vault is a compact Chrome Manifest V3 toolkit for local-first ChatGPT wo
 - Provides an editable Prompt Library for local slash-style snippets.
 - Copies a selected prompt or inserts it into the ChatGPT composer.
 - Uses no backend services, cloud sync, analytics, or remote storage.
+
+## Product Direction
+
+The product direction is moving from plain export/bookmark tooling toward reusable work memory for AI chats. See [docs/product-direction-2026-06.md](docs/product-direction-2026-06.md) for the current roadmap, starting with the Work Capsule MVP.
 
 ## Selected-Message Export
 
