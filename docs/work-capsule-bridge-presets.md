@@ -4,6 +4,8 @@ June 2026
 
 Work Capsule bridge presets are deterministic local text renderings of `work-capsule/v1` records. They prepare capsule context for reuse in another AI tool without adding provider integrations, browser permissions, backend services, analytics, cloud sync, or remote LLM calls.
 
+The Work Capsule MVP acceptance snapshot is in [work-capsule-mvp-acceptance-2026-06.md](work-capsule-mvp-acceptance-2026-06.md).
+
 ## Supported Presets
 
 - **Plain Markdown**: the existing full Work Capsule Markdown rendering.

@@ -24,6 +24,8 @@ AI Chat Vault is a compact Chrome Manifest V3 toolkit for turning ChatGPT conver
 
 The product direction is moving from plain export/bookmark tooling toward reusable work memory for AI chats. See [docs/product-direction-2026-06.md](docs/product-direction-2026-06.md) for the current roadmap, starting with the Work Capsule MVP.
 
+The Work Capsule MVP acceptance snapshot is in [docs/work-capsule-mvp-acceptance-2026-06.md](docs/work-capsule-mvp-acceptance-2026-06.md).
+
 The current bridge preset behavior is documented in [docs/work-capsule-bridge-presets.md](docs/work-capsule-bridge-presets.md).
 
 ## Selected-Message Export
