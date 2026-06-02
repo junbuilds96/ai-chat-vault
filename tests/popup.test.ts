@@ -715,6 +715,7 @@ describe("toolbar popup", () => {
     expect(Array.from(workCapsulePresetSelect().options).map((option) => option.textContent)).toEqual([
       "Plain Markdown",
       "Generic AI context",
+      "Context Prompt only",
       "ChatGPT Project-style context",
       "Claude Project-style context",
       "Gemini context"
@@ -2264,17 +2265,28 @@ describe("toolbar popup", () => {
     expect(writeText.mock.calls[0][0]).toContain("## Source");
     expect(status()).toBe("Copied Generic AI context to clipboard");
 
+    workCapsulePresetSelect().value = "context-prompt-only";
+    workCapsulePresetSelect().dispatchEvent(new Event("change", { bubbles: true }));
+    expect(status()).toBe("Selected Context Prompt only");
+
+    button("copy-capsule-context").click();
+    await flushAsyncClick();
+    expect(writeText.mock.calls[1][0]).toBe(
+      "Paste this exact context prompt into a new chat.\n"
+    );
+    expect(status()).toBe("Copied Context Prompt only to clipboard");
+
     workCapsulePresetSelect().value = "chatgpt-project-context";
     workCapsulePresetSelect().dispatchEvent(new Event("change", { bubbles: true }));
     expect(status()).toBe("Selected ChatGPT Project-style context");
 
     button("copy-capsule-context").click();
     await flushAsyncClick();
-    expect(writeText.mock.calls[1][0]).toContain("# ChatGPT Project-Style Context");
-    expect(writeText.mock.calls[1][0]).toContain(
+    expect(writeText.mock.calls[2][0]).toContain("# ChatGPT Project-Style Context");
+    expect(writeText.mock.calls[2][0]).toContain(
       "## Carry-Forward Instructions\n\nPaste this exact context prompt into a new chat."
     );
-    expect(writeText.mock.calls[1][0]).toContain("## Source Trace");
+    expect(writeText.mock.calls[2][0]).toContain("## Source Trace");
     expect(status()).toBe("Copied ChatGPT Project-style context to clipboard");
 
     workCapsulePresetSelect().value = "gemini-context";
@@ -2283,35 +2295,35 @@ describe("toolbar popup", () => {
 
     button("copy-capsule-context").click();
     await flushAsyncClick();
-    expect(writeText.mock.calls[2][0]).toContain("# Gemini Context");
-    expect(writeText.mock.calls[2][0]).toContain(
+    expect(writeText.mock.calls[3][0]).toContain("# Gemini Context");
+    expect(writeText.mock.calls[3][0]).toContain(
       "## Instructions For Gemini\n\nPaste this exact context prompt into a new chat."
     );
-    expect(writeText.mock.calls[2][0]).toContain("## Source");
+    expect(writeText.mock.calls[3][0]).toContain("## Source");
     expect(status()).toBe("Copied Gemini context to clipboard");
 
     button("copy-capsule-markdown").click();
     await flushAsyncClick();
-    expect(writeText.mock.calls[3][0]).toContain(
+    expect(writeText.mock.calls[4][0]).toContain(
       "## Context Prompt\n\nPaste this exact context prompt into a new chat."
     );
-    expect(writeText.mock.calls[3][0]).toContain("## Source");
-    expect(writeText.mock.calls[3][0]).toContain(
+    expect(writeText.mock.calls[4][0]).toContain("## Source");
+    expect(writeText.mock.calls[4][0]).toContain(
       "- Selected turn IDs: message-1, message-2, message-3"
     );
-    expect(writeText.mock.calls[3][0]).toContain(
+    expect(writeText.mock.calls[4][0]).toContain(
       "- message-3 (user): Follow-up three"
     );
     expect(status()).toBe("Copied capsule Markdown to clipboard");
 
     button("copy-capsule-source-citation").click();
     await flushAsyncClick();
-    expect(writeText.mock.calls[4][0]).toContain("Work Capsule: Popup Test - ChatGPT");
-    expect(writeText.mock.calls[4][0]).toContain("Source conversation: Popup Test - ChatGPT");
-    expect(writeText.mock.calls[4][0]).toContain(
+    expect(writeText.mock.calls[5][0]).toContain("Work Capsule: Popup Test - ChatGPT");
+    expect(writeText.mock.calls[5][0]).toContain("Source conversation: Popup Test - ChatGPT");
+    expect(writeText.mock.calls[5][0]).toContain(
       "Source URL: https://chatgpt.com/c/test"
     );
-    expect(writeText.mock.calls[4][0]).toContain(
+    expect(writeText.mock.calls[5][0]).toContain(
       "Selected turn IDs: message-1, message-2, message-3"
     );
     expect(status()).toBe("Copied source citation to clipboard");

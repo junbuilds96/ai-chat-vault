@@ -3,6 +3,7 @@ export const WORK_CAPSULE_INDEX_KEY = "workCapsules:v1";
 export const WORK_CAPSULE_OUTPUT_PRESETS = [
   { id: "markdown", name: "Plain Markdown" },
   { id: "generic-ai-context", name: "Generic AI context" },
+  { id: "context-prompt-only", name: "Context Prompt only" },
   { id: "chatgpt-project-context", name: "ChatGPT Project-style context" },
   { id: "claude-project-context", name: "Claude Project-style context" },
   { id: "gemini-context", name: "Gemini context" }
@@ -125,6 +126,7 @@ const WORK_CAPSULE_OUTPUT_PRESET_NAME_BY_ID: Record<
 > = {
   markdown: "Plain Markdown",
   "generic-ai-context": "Generic AI context",
+  "context-prompt-only": "Context Prompt only",
   "chatgpt-project-context": "ChatGPT Project-style context",
   "claude-project-context": "Claude Project-style context",
   "gemini-context": "Gemini context"
@@ -237,6 +239,8 @@ export function renderWorkCapsuleOutputPreset(
       return renderWorkCapsuleMarkdown(capsule);
     case "generic-ai-context":
       return renderGenericAiContext(capsule);
+    case "context-prompt-only":
+      return renderContextPromptOnly(capsule);
     case "chatgpt-project-context":
       return renderChatGptProjectContext(capsule);
     case "claude-project-context":
@@ -495,6 +499,11 @@ function renderGenericAiContext(capsule: WorkCapsuleV1): string {
     renderArtifactSection("Artifacts", capsule.artifacts),
     renderSourceSection(capsule)
   ]);
+}
+
+function renderContextPromptOnly(capsule: WorkCapsuleV1): string {
+  const contextPrompt = capsule.contextPrompt.trim();
+  return `${contextPrompt || buildWorkCapsuleContextPrompt(capsule)}\n`;
 }
 
 function renderChatGptProjectContext(capsule: WorkCapsuleV1): string {

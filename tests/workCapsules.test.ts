@@ -316,13 +316,16 @@ describe("work capsule output presets", () => {
     expect(WORK_CAPSULE_OUTPUT_PRESETS).toEqual([
       { id: "markdown", name: "Plain Markdown" },
       { id: "generic-ai-context", name: "Generic AI context" },
+      { id: "context-prompt-only", name: "Context Prompt only" },
       { id: "chatgpt-project-context", name: "ChatGPT Project-style context" },
       { id: "claude-project-context", name: "Claude Project-style context" },
       { id: "gemini-context", name: "Gemini context" }
     ]);
+    expect(isWorkCapsuleOutputPresetId("context-prompt-only")).toBe(true);
     expect(isWorkCapsuleOutputPresetId("claude-project-context")).toBe(true);
     expect(isWorkCapsuleOutputPresetId("gemini-context")).toBe(true);
     expect(isWorkCapsuleOutputPresetId("remote-provider")).toBe(false);
+    expect(workCapsuleOutputPresetName("context-prompt-only")).toBe("Context Prompt only");
     expect(workCapsuleOutputPresetName("chatgpt-project-context")).toBe(
       "ChatGPT Project-style context"
     );
@@ -333,6 +336,57 @@ describe("work capsule output presets", () => {
     expect(renderWorkCapsuleOutputPreset(capsule(), "markdown")).toBe(
       renderWorkCapsuleMarkdown(capsule())
     );
+  });
+
+  it("renders only the trimmed context prompt with one trailing newline", () => {
+    const rendered = renderWorkCapsuleOutputPreset(
+      capsule({
+        contextPrompt: "\n  Use this hand-edited context prompt exactly.\n\n"
+      }),
+      "context-prompt-only"
+    );
+
+    expect(rendered).toBe("Use this hand-edited context prompt exactly.\n");
+  });
+
+  it("renders a deterministic context prompt fallback when the editable prompt is blank", () => {
+    const rendered = renderWorkCapsuleOutputPreset(
+      capsule({
+        contextPrompt: " \n\t "
+      }),
+      "context-prompt-only"
+    );
+
+    expect(rendered).toBe(`Use this Work Capsule to continue the work in a new AI chat.
+
+Title: Launch Plan
+Goal: Ship the first local-only work capsule.
+
+Reusable context:
+- Use Chrome local storage only.
+
+Decisions:
+- Keep Week 1 UI out of scope.
+
+Constraints:
+- Do not call network APIs.
+
+Facts:
+- The extension already captures ChatGPT turns.
+
+Open questions:
+- Which popup affordance creates capsules later?
+
+Next actions:
+- [todo] @user Wire this into the popup flow.
+
+Artifacts:
+- Capsule schema (spec): Stable enough for Week 1 storage tests.
+
+Selected excerpts:
+- turn-1 (user): Create a local schema.
+- turn-2 (assistant): Keep storage local-only.
+`);
   });
 
   it("renders deterministic generic AI context", () => {

@@ -10,6 +10,7 @@ The Work Capsule MVP acceptance snapshot is in [work-capsule-mvp-acceptance-2026
 
 - **Plain Markdown**: the existing full Work Capsule Markdown rendering.
 - **Generic AI context**: a provider-neutral handoff prompt plus the capsule fields and source trace.
+- **Context Prompt only**: just the editable `contextPrompt`, trimmed with a trailing newline, with a deterministic local fallback if the editable prompt is blank.
 - **ChatGPT Project-style context**: a project-oriented rendering for manual paste into ChatGPT Project context or instructions.
 - **Claude Project-style context**: a project-knowledge rendering for manual paste into Claude Project knowledge.
 - **Gemini context**: a Gemini-oriented rendering for manual paste into Gemini or Gemini workspace-style sessions.
