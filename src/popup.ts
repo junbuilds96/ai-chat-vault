@@ -305,8 +305,18 @@ async function handlePopupClick(event: MouseEvent): Promise<void> {
       return;
     }
 
+    if (action === "reuse-capsule") {
+      await reuseRecentWorkCapsule();
+      return;
+    }
+
     if (action === "reopen-library-capsule") {
       await reopenWorkCapsuleById(button.dataset.acvCapsuleId ?? "");
+      return;
+    }
+
+    if (action === "reuse-library-capsule") {
+      await reuseWorkCapsuleById(button.dataset.acvCapsuleId ?? "");
       return;
     }
 
@@ -1131,12 +1141,53 @@ async function reopenRecentWorkCapsule(): Promise<void> {
   setStatus("Reopened saved capsule");
 }
 
+async function reuseRecentWorkCapsule(): Promise<void> {
+  if (!state.recentWorkCapsule) {
+    throw new Error("No saved capsule is available for this conversation");
+  }
+
+  reuseWorkCapsuleDraft(state.recentWorkCapsule);
+}
+
 async function reopenWorkCapsuleById(id: string): Promise<void> {
   const capsule = await savedWorkCapsuleById(id);
   state.workCapsuleDraft = capsule;
   state.workCapsuleContextPromptEdited = true;
   renderWorkCapsuleSection();
   setStatus("Reopened saved capsule");
+}
+
+async function reuseWorkCapsuleById(id: string): Promise<void> {
+  const capsule = await savedWorkCapsuleById(id);
+  reuseWorkCapsuleDraft(capsule);
+}
+
+function reuseWorkCapsuleDraft(savedCapsule: WorkCapsuleV1): void {
+  const { source, excerpts } = currentWorkCapsuleSourceFromSelection();
+  const now = new Date().toISOString();
+  state.workCapsuleDraft = {
+    schemaVersion: WORK_CAPSULE_SCHEMA_VERSION,
+    id: uniqueWorkCapsuleId(),
+    title: savedCapsule.title,
+    ...(savedCapsule.project ? { project: savedCapsule.project } : {}),
+    goal: savedCapsule.goal,
+    contextPrompt: savedCapsule.contextPrompt,
+    reusableContext: [...savedCapsule.reusableContext],
+    decisions: savedCapsule.decisions.map((item) => ({ ...item })),
+    constraints: savedCapsule.constraints.map((item) => ({ ...item })),
+    facts: savedCapsule.facts.map((item) => ({ ...item })),
+    openQuestions: savedCapsule.openQuestions.map((item) => ({ ...item })),
+    nextActions: savedCapsule.nextActions.map((action) => ({ ...action })),
+    artifacts: savedCapsule.artifacts.map((artifact) => ({ ...artifact })),
+    source,
+    sourceExcerptPolicy: "selected-excerpts",
+    excerpts,
+    createdAt: now,
+    updatedAt: now
+  };
+  state.workCapsuleContextPromptEdited = true;
+  renderWorkCapsuleSection();
+  setStatus("Created unsaved capsule draft from saved capsule");
 }
 
 async function deleteCurrentWorkCapsule(): Promise<void> {
@@ -1293,12 +1344,12 @@ function updateWorkCapsuleDraftFromFields(): void {
     ...optionalCapsuleField("project"),
     goal: stringFieldValue("goal") || "Capture reusable context from selected messages.",
     reusableContext: textAreaLines("reusableContext"),
-    decisions: workCapsuleItems("decisions", "decision"),
-    constraints: workCapsuleItems("constraints", "constraint"),
-    facts: workCapsuleItems("facts", "fact"),
-    openQuestions: workCapsuleItems("openQuestions", "question"),
-    nextActions: workCapsuleActions(),
-    artifacts: workCapsuleArtifacts(),
+    decisions: workCapsuleItems("decisions", "decision", draft.decisions),
+    constraints: workCapsuleItems("constraints", "constraint", draft.constraints),
+    facts: workCapsuleItems("facts", "fact", draft.facts),
+    openQuestions: workCapsuleItems("openQuestions", "question", draft.openQuestions),
+    nextActions: workCapsuleActions(draft.nextActions),
+    artifacts: workCapsuleArtifacts(draft.artifacts),
     updatedAt: new Date().toISOString()
   };
 
@@ -1338,8 +1389,10 @@ function renderWorkCapsuleSection(): void {
   }
 
   const selectedCount = state.selectedMessageIndexes.size;
+  const draftSelectedTurnCount = draft?.source.selectedTurnIds.length ?? 0;
+  const draftStatus = draft && !isSavedWorkCapsuleId(draft.id) ? " - unsaved draft" : "";
   context.textContent = draft
-    ? `${draft.source.selectedTurnIds.length} selected turn${draft.source.selectedTurnIds.length === 1 ? "" : "s"}`
+    ? `${draftSelectedTurnCount} selected turn${draftSelectedTurnCount === 1 ? "" : "s"}${draftStatus}`
     : state.recentWorkCapsule
       ? "Recent capsule available"
     : `${selectedCount} selected turn${selectedCount === 1 ? "" : "s"}`;
@@ -1420,6 +1473,11 @@ function renderRecentWorkCapsule(capsule: WorkCapsuleV1, container: HTMLDivEleme
   button.dataset.acvAction = "reopen-capsule";
   button.textContent = "Reopen";
 
+  const reuseButton = document.createElement("button");
+  reuseButton.type = "button";
+  reuseButton.dataset.acvAction = "reuse-capsule";
+  reuseButton.textContent = "Reuse";
+
   const copySourceButton = document.createElement("button");
   copySourceButton.type = "button";
   copySourceButton.dataset.acvAction = "copy-capsule-source-citation";
@@ -1432,7 +1490,7 @@ function renderRecentWorkCapsule(capsule: WorkCapsuleV1, container: HTMLDivEleme
 
   const actions = document.createElement("div");
   actions.className = "acv-work-capsule-recent-actions";
-  actions.append(button, copySourceButton, deleteButton);
+  actions.append(button, reuseButton, copySourceButton, deleteButton);
 
   details.append(title, label, updated);
   container.append(details, actions);
@@ -1535,6 +1593,12 @@ function renderWorkCapsuleLibraryRow(capsule: WorkCapsuleIndexItem): HTMLDivElem
   reopenButton.dataset.acvCapsuleId = capsule.id;
   reopenButton.textContent = "Reopen";
 
+  const reuseButton = document.createElement("button");
+  reuseButton.type = "button";
+  reuseButton.dataset.acvAction = "reuse-library-capsule";
+  reuseButton.dataset.acvCapsuleId = capsule.id;
+  reuseButton.textContent = "Reuse";
+
   const copyButton = document.createElement("button");
   copyButton.type = "button";
   copyButton.dataset.acvAction = "copy-library-capsule-context";
@@ -1555,7 +1619,7 @@ function renderWorkCapsuleLibraryRow(capsule: WorkCapsuleIndexItem): HTMLDivElem
 
   const actions = document.createElement("div");
   actions.className = "acv-work-capsule-library-actions";
-  actions.append(reopenButton, copyButton, copySourceButton, removeButton);
+  actions.append(reopenButton, reuseButton, copyButton, copySourceButton, removeButton);
 
   row.append(details, actions);
   return row;
@@ -1582,31 +1646,43 @@ function artifactMarkdownInput(artifact: WorkCapsuleArtifact): string {
   return body ? `${artifact.title}\n${body}` : artifact.title;
 }
 
-function workCapsuleItems(field: string, prefix: string): WorkCapsuleItem[] {
+function workCapsuleItems(
+  field: string,
+  prefix: string,
+  existingItems: WorkCapsuleItem[] = []
+): WorkCapsuleItem[] {
   return textAreaLines(field).map((text, index) => ({
-    id: `${prefix}-${index + 1}`,
+    id: existingItems[index]?.id ?? `${prefix}-${index + 1}`,
     text
   }));
 }
 
-function workCapsuleActions(): WorkCapsuleAction[] {
-  return textAreaLines("nextActions").map((text, index) => ({
-    id: `action-${index + 1}`,
-    text,
-    status: "todo",
-    owner: "user"
-  }));
+function workCapsuleActions(existingActions: WorkCapsuleAction[] = []): WorkCapsuleAction[] {
+  return textAreaLines("nextActions").map((text, index) => {
+    const existingAction = existingActions[index];
+    const owner = existingAction ? existingAction.owner : "user";
+
+    return {
+      id: existingAction?.id ?? `action-${index + 1}`,
+      text,
+      status: existingAction?.status ?? "todo",
+      ...(owner ? { owner } : {})
+    };
+  });
 }
 
-function workCapsuleArtifacts(): WorkCapsuleArtifact[] {
+function workCapsuleArtifacts(
+  existingArtifacts: WorkCapsuleArtifact[] = []
+): WorkCapsuleArtifact[] {
   return splitTextBlocks(stringFieldValue("artifacts")).map((block, index) => {
     const lines = block.split(/\r?\n/);
     const title = compactFieldLine(lines[0]) || `Artifact ${index + 1}`;
     const body = lines.slice(1).join("\n").trim() || title;
+    const existingArtifact = existingArtifacts[index];
 
     return {
-      id: `artifact-${index + 1}`,
-      type: "other",
+      id: existingArtifact?.id ?? `artifact-${index + 1}`,
+      type: existingArtifact?.type ?? "other",
       title,
       body
     };
@@ -1662,6 +1738,43 @@ function workCapsuleDeleteButton(): HTMLButtonElement {
 
 function sortedSelectedMessageIndexes(): number[] {
   return Array.from(state.selectedMessageIndexes).sort((first, second) => first - second);
+}
+
+function currentWorkCapsuleSourceFromSelection(): Pick<
+  WorkCapsuleV1,
+  "source" | "excerpts"
+> {
+  const conversation = state.conversation;
+  if (!conversation) {
+    throw new Error("Capture a conversation before reusing a saved capsule");
+  }
+
+  if (conversation.messages.length === 0) {
+    throw new Error("No messages were detected to reuse");
+  }
+
+  const selectedIndexes = sortedSelectedMessageIndexes();
+  if (selectedIndexes.length === 0) {
+    throw new Error("Select at least one message to reuse");
+  }
+
+  return {
+    source: {
+      provider: "chatgpt",
+      title: conversation.title,
+      url: conversation.url,
+      selectedTurnIds: selectedIndexes.map(turnIdForMessageIndex)
+    },
+    excerpts: selectedIndexes.map((messageIndex) => {
+      const message = conversation.messages[messageIndex];
+      return {
+        id: `excerpt-${messageIndex + 1}`,
+        turnId: turnIdForMessageIndex(messageIndex),
+        role: message?.speaker ?? "unknown",
+        text: message?.text ?? ""
+      };
+    })
+  };
 }
 
 function turnIdForMessageIndex(messageIndex: number): string {

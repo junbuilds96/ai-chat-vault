@@ -864,7 +864,7 @@ describe("toolbar popup", () => {
     expect(workCapsuleFields().hidden).toBe(true);
     expect(workCapsuleRecent().hidden).toBe(false);
     expect(workCapsuleRecent().textContent).toBe(
-      "Saved Retrieval CapsuleCurrent ClientUpdated 2026-06-01T02:00:00.000ZReopenCopy sourceDelete"
+      "Saved Retrieval CapsuleCurrent ClientUpdated 2026-06-01T02:00:00.000ZReopenReuseCopy sourceDelete"
     );
     expect(document.querySelector("[data-acv-work-capsule-context]")?.textContent).toBe(
       "Recent capsule available"
@@ -953,20 +953,315 @@ describe("toolbar popup", () => {
     expect(libraryRows()).toHaveLength(2);
     expect(libraryRows()[0].dataset.acvCapsuleId).toBe("capsule-other");
     expect(libraryRows()[0].textContent).toBe(
-      "Other Project CapsuleReuse a capsule from a different saved conversation.Client LaunchUpdated 2026-06-01T03:30:00.000ZReopenCopy contextCopy sourceRemove"
+      "Other Project CapsuleReuse a capsule from a different saved conversation.Client LaunchUpdated 2026-06-01T03:30:00.000ZReopenReuseCopy contextCopy sourceRemove"
     );
     expect(libraryRows()[1].textContent).toBe(
-      "Saved Retrieval CapsuleResume the saved work capsule from this conversation.Popup Test - ChatGPTUpdated 2026-06-01T02:00:00.000ZReopenCopy contextCopy sourceRemove"
+      "Saved Retrieval CapsuleResume the saved work capsule from this conversation.Popup Test - ChatGPTUpdated 2026-06-01T02:00:00.000ZReopenReuseCopy contextCopy sourceRemove"
     );
     expect(
       libraryRows()[0].querySelectorAll<HTMLButtonElement>("button").length
-    ).toBe(4);
+    ).toBe(5);
     expect(
       Array.from(libraryRows()[0].querySelectorAll<HTMLButtonElement>("button")).map(
         (rowButton) => rowButton.textContent
       )
-    ).toEqual(["Reopen", "Copy context", "Copy source", "Remove"]);
+    ).toEqual(["Reopen", "Reuse", "Copy context", "Copy source", "Remove"]);
     expect(workCapsuleRecent().hidden).toBe(false);
+  });
+
+  it("reuses a Work Capsule Library body as an unsaved draft for the current conversation", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T08:00:00.000Z"));
+    const saved = workCapsule({
+      id: "capsule-library-reuse",
+      title: "Reusable Saved Capsule",
+      project: "Reuse Project",
+      goal: "Carry forward the saved memory fields.",
+      contextPrompt: "Keep this edited context prompt in the reused draft.",
+      reusableContext: ["Saved reusable context"],
+      decisions: [{ id: "decision-1", text: "Reuse should not overwrite the source capsule." }],
+      constraints: [{ id: "constraint-1", text: "Keep reuse local-only." }],
+      facts: [{ id: "fact-1", text: "The library capsule came from another thread." }],
+      openQuestions: [{ id: "question-1", text: "What should the new thread decide?" }],
+      nextActions: [
+        {
+          id: "action-1",
+          text: "Save the reused draft only when ready.",
+          status: "todo",
+          owner: "user"
+        }
+      ],
+      artifacts: [
+        {
+          id: "artifact-1",
+          type: "spec",
+          title: "Saved spec",
+          body: "Saved artifact body"
+        }
+      ],
+      source: {
+        ...workCapsule().source,
+        title: "Earlier source thread",
+        url: "https://chatgpt.com/c/earlier-source",
+        selectedTurnIds: ["message-1"]
+      },
+      excerpts: [
+        {
+          id: "excerpt-1",
+          turnId: "message-1",
+          role: "user",
+          text: "Earlier source text"
+        }
+      ],
+      createdAt: "2026-06-01T01:00:00.000Z",
+      updatedAt: "2026-06-01T06:00:00.000Z"
+    });
+    const chromeMock = installChromeMock("https://chatgpt.com/c/test?model=gpt-5#current", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: saved.id,
+          title: saved.title,
+          project: saved.project,
+          goal: saved.goal,
+          sourceTitle: saved.source.title,
+          sourceUrl: saved.source.url,
+          createdAt: saved.createdAt,
+          updatedAt: saved.updatedAt
+        }
+      ],
+      [workCapsuleBodyKey(saved.id)]: saved
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+    button("select-none").click();
+    const assistantCheckbox = checkboxes()[1];
+    assistantCheckbox.checked = true;
+    assistantCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+
+    libraryButtons("reuse-library-capsule")[0].click();
+    await flushAsyncClick();
+
+    const draftDeleteButton = workCapsuleFields().querySelector<HTMLButtonElement>(
+      'button[data-acv-action="delete-capsule"]'
+    );
+    expect(workCapsuleFields().hidden).toBe(false);
+    expect(draftDeleteButton?.hidden).toBe(true);
+    expect(capsuleField("title").value).toBe("Reusable Saved Capsule");
+    expect(capsuleField("project").value).toBe("Reuse Project");
+    expect(capsuleField("goal").value).toBe("Carry forward the saved memory fields.");
+    expect(capsuleField("contextPrompt").value).toBe(
+      "Keep this edited context prompt in the reused draft."
+    );
+    expect(capsuleField("reusableContext").value).toBe("Saved reusable context");
+    expect(capsuleField("decisions").value).toBe(
+      "Reuse should not overwrite the source capsule."
+    );
+    expect(capsuleField("constraints").value).toBe("Keep reuse local-only.");
+    expect(capsuleField("facts").value).toBe(
+      "The library capsule came from another thread."
+    );
+    expect(capsuleField("openQuestions").value).toBe(
+      "What should the new thread decide?"
+    );
+    expect(capsuleField("nextActions").value).toBe(
+      "Save the reused draft only when ready."
+    );
+    expect(capsuleField("artifacts").value).toBe("Saved spec\nSaved artifact body");
+    expect(document.querySelector("[data-acv-work-capsule-context]")?.textContent).toBe(
+      "1 selected turn - unsaved draft"
+    );
+    expect(status()).toBe("Created unsaved capsule draft from saved capsule");
+    expect(chromeMock.store[workCapsuleBodyKey(saved.id)]).toEqual(saved);
+    expect(chromeMock.store[WORK_CAPSULE_INDEX_KEY]).toEqual([
+      expect.objectContaining({ id: saved.id })
+    ]);
+    expect(savedCapsules(chromeMock.store)).toHaveLength(1);
+
+    button("save-capsule").click();
+    await flushAsyncClick();
+
+    const storedBodies = savedCapsules(chromeMock.store) as WorkCapsuleV1[];
+    expect(storedBodies).toHaveLength(2);
+    expect(chromeMock.store[workCapsuleBodyKey(saved.id)]).toEqual(saved);
+    const reused = storedBodies.find((capsule) => capsule.id !== saved.id);
+    expect(reused).toMatchObject({
+      schemaVersion: WORK_CAPSULE_SCHEMA_VERSION,
+      id: expect.any(String),
+      title: "Reusable Saved Capsule",
+      project: "Reuse Project",
+      goal: "Carry forward the saved memory fields.",
+      contextPrompt: "Keep this edited context prompt in the reused draft.",
+      reusableContext: ["Saved reusable context"],
+      decisions: [{ id: "decision-1", text: "Reuse should not overwrite the source capsule." }],
+      constraints: [{ id: "constraint-1", text: "Keep reuse local-only." }],
+      facts: [{ id: "fact-1", text: "The library capsule came from another thread." }],
+      openQuestions: [{ id: "question-1", text: "What should the new thread decide?" }],
+      nextActions: [
+        {
+          id: "action-1",
+          text: "Save the reused draft only when ready.",
+          status: "todo",
+          owner: "user"
+        }
+      ],
+      artifacts: [
+        {
+          id: "artifact-1",
+          type: "spec",
+          title: "Saved spec",
+          body: "Saved artifact body"
+        }
+      ],
+      source: {
+        provider: "chatgpt",
+        title: "Popup Test - ChatGPT",
+        url: "https://chatgpt.com/c/test",
+        selectedTurnIds: ["message-2"]
+      },
+      excerpts: [{ id: "excerpt-2", turnId: "message-2", role: "assistant", text: "Answer two" }],
+      createdAt: "2026-06-01T08:00:00.000Z",
+      updatedAt: "2026-06-01T08:00:00.000Z"
+    });
+    expect(reused?.id).not.toBe(saved.id);
+    expect(chromeMock.store[WORK_CAPSULE_INDEX_KEY]).toEqual([
+      expect.objectContaining({
+        id: reused?.id,
+        title: "Reusable Saved Capsule",
+        project: "Reuse Project",
+        sourceTitle: "Popup Test - ChatGPT",
+        sourceUrl: "https://chatgpt.com/c/test",
+        createdAt: "2026-06-01T08:00:00.000Z",
+        updatedAt: "2026-06-01T08:00:00.000Z"
+      }),
+      expect.objectContaining({
+        id: saved.id,
+        title: saved.title,
+        sourceTitle: saved.source.title,
+        sourceUrl: saved.source.url
+      })
+    ]);
+    expect(status()).toBe("Saved capsule locally");
+    vi.useRealTimers();
+  });
+
+  it("reuses the recent Work Capsule as an unsaved draft for the current selection", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T08:30:00.000Z"));
+    const saved = workCapsule({ project: "Current Client" });
+    const chromeMock = installChromeMock("https://chatgpt.com/c/test?model=gpt-5", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: saved.id,
+          title: saved.title,
+          project: saved.project,
+          goal: saved.goal,
+          sourceTitle: saved.source.title,
+          sourceUrl: saved.source.url,
+          createdAt: saved.createdAt,
+          updatedAt: saved.updatedAt
+        }
+      ],
+      [workCapsuleBodyKey(saved.id)]: saved
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+    button("select-none").click();
+    const firstCheckbox = checkboxes()[0];
+    const thirdCheckbox = checkboxes()[2];
+    firstCheckbox.checked = true;
+    firstCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+    thirdCheckbox.checked = true;
+    thirdCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+
+    button("reuse-capsule").click();
+    await flushAsyncClick();
+
+    const draftDeleteButton = workCapsuleFields().querySelector<HTMLButtonElement>(
+      'button[data-acv-action="delete-capsule"]'
+    );
+    expect(workCapsuleRecent().hidden).toBe(true);
+    expect(workCapsuleFields().hidden).toBe(false);
+    expect(draftDeleteButton?.hidden).toBe(true);
+    expect(capsuleField("title").value).toBe("Saved Retrieval Capsule");
+    expect(capsuleField("project").value).toBe("Current Client");
+    expect(capsuleField("contextPrompt").value).toBe(
+      "Edited saved context prompt for the next AI chat."
+    );
+    expect(document.querySelector("[data-acv-work-capsule-context]")?.textContent).toBe(
+      "2 selected turns - unsaved draft"
+    );
+    expect(savedCapsules(chromeMock.store)).toHaveLength(1);
+
+    button("save-capsule").click();
+    await flushAsyncClick();
+
+    const storedBodies = savedCapsules(chromeMock.store) as WorkCapsuleV1[];
+    const reused = storedBodies.find((capsule) => capsule.id !== saved.id);
+    expect(storedBodies).toHaveLength(2);
+    expect(chromeMock.store[workCapsuleBodyKey(saved.id)]).toEqual(saved);
+    expect(reused).toMatchObject({
+      title: "Saved Retrieval Capsule",
+      project: "Current Client",
+      source: {
+        provider: "chatgpt",
+        title: "Popup Test - ChatGPT",
+        url: "https://chatgpt.com/c/test",
+        selectedTurnIds: ["message-1", "message-3"]
+      },
+      excerpts: [
+        { id: "excerpt-1", turnId: "message-1", role: "user", text: "Question one" },
+        { id: "excerpt-3", turnId: "message-3", role: "user", text: "Follow-up three" }
+      ],
+      createdAt: "2026-06-01T08:30:00.000Z",
+      updatedAt: "2026-06-01T08:30:00.000Z"
+    });
+    expect(reused?.id).not.toBe(saved.id);
+    vi.useRealTimers();
+  });
+
+  it("does not persist a reused Work Capsule draft when no current messages are selected", async () => {
+    const saved = workCapsule({
+      id: "capsule-reuse-no-selection",
+      title: "No Selection Reuse Capsule"
+    });
+    const chromeMock = installChromeMock("https://chatgpt.com/c/test", {
+      [WORK_CAPSULE_INDEX_KEY]: [
+        {
+          id: saved.id,
+          title: saved.title,
+          goal: saved.goal,
+          sourceTitle: saved.source.title,
+          sourceUrl: saved.source.url,
+          createdAt: saved.createdAt,
+          updatedAt: saved.updatedAt
+        }
+      ],
+      [workCapsuleBodyKey(saved.id)]: saved
+    });
+
+    await loadPopup();
+    await flushPromptLoad();
+    button("capture").click();
+    await flushAsyncClick();
+    button("select-none").click();
+    await flushAsyncClick();
+
+    libraryButtons("reuse-library-capsule")[0].click();
+    await flushAsyncClick();
+
+    expect(status()).toBe("Select at least one message to reuse");
+    expect(workCapsuleFields().hidden).toBe(true);
+    expect(chromeMock.store[workCapsuleBodyKey(saved.id)]).toEqual(saved);
+    expect(chromeMock.store[WORK_CAPSULE_INDEX_KEY]).toEqual([
+      expect.objectContaining({ id: saved.id })
+    ]);
+    expect(savedCapsules(chromeMock.store)).toHaveLength(1);
   });
 
   it("keeps Work Capsule Library actions working from grouped rows", async () => {
@@ -1861,7 +2156,7 @@ describe("toolbar popup", () => {
     expect(chromeMock.remove).not.toHaveBeenCalled();
     expect(workCapsuleRecent().hidden).toBe(false);
     expect(workCapsuleRecent().textContent).toBe(
-      "Saved Retrieval CapsulePopup Test - ChatGPTUpdated 2026-06-01T02:00:00.000ZReopenCopy sourceDelete"
+      "Saved Retrieval CapsulePopup Test - ChatGPTUpdated 2026-06-01T02:00:00.000ZReopenReuseCopy sourceDelete"
     );
     expect(status()).toBe("Delete canceled; saved capsule kept locally");
   });
@@ -2077,6 +2372,12 @@ describe("toolbar popup", () => {
     button("capture").click();
     await flushAsyncClick();
     libraryButtons("copy-library-capsule-context")[0].click();
+    await flushAsyncClick();
+    libraryButtons("reuse-library-capsule")[0].click();
+    await flushAsyncClick();
+    button("copy-capsule-context").click();
+    await flushAsyncClick();
+    button("capture").click();
     await flushAsyncClick();
     libraryButtons("reopen-library-capsule")[0].click();
     await flushAsyncClick();
