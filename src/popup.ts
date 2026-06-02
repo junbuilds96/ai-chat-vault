@@ -1140,26 +1140,25 @@ async function reopenWorkCapsuleById(id: string): Promise<void> {
 }
 
 async function deleteCurrentWorkCapsule(): Promise<void> {
-  const capsule = state.workCapsuleDraft ?? state.recentWorkCapsule;
+  const capsule = state.workCapsuleDraft ? currentWorkCapsuleDraft() : state.recentWorkCapsule;
   if (!capsule) {
     throw new Error("No saved capsule is available for this conversation");
   }
 
-  const savedCapsule = state.recentWorkCapsule;
-  if (!savedCapsule || savedCapsule.id !== capsule.id) {
+  if (!isSavedWorkCapsuleId(capsule.id)) {
     throw new Error("Save the capsule before deleting it");
   }
 
   const confirmed = window.confirm(
-    `Delete saved Work Capsule "${savedCapsule.title}" from this browser?`
+    `Delete saved Work Capsule "${capsule.title}" from this browser?`
   );
   if (!confirmed) {
-    setStatus("Capsule delete canceled");
+    setStatus("Delete canceled; saved capsule kept locally");
     return;
   }
 
-  await deleteWorkCapsule(savedCapsule.id);
-  if (state.workCapsuleDraft?.id === savedCapsule.id) {
+  await deleteWorkCapsule(capsule.id);
+  if (state.workCapsuleDraft?.id === capsule.id) {
     state.workCapsuleDraft = null;
     state.workCapsuleContextPromptEdited = false;
   }
@@ -1330,7 +1329,7 @@ function renderWorkCapsuleSection(): void {
   library.hidden = !state.conversation || state.workCapsuleLibrary.length === 0;
   recent.textContent = "";
   library.textContent = "";
-  deleteButton.hidden = !draft || state.recentWorkCapsule?.id !== draft.id;
+  deleteButton.hidden = !draft || !isSavedWorkCapsuleId(draft.id);
   renderWorkCapsulePresetOptions(workCapsulePresetSelect());
 
   if (!state.conversation) {
@@ -1370,6 +1369,13 @@ function renderWorkCapsuleSection(): void {
   setCapsuleFieldValue(
     "artifacts",
     draft.artifacts.map(artifactMarkdownInput).join("\n\n")
+  );
+}
+
+function isSavedWorkCapsuleId(id: string): boolean {
+  return (
+    state.recentWorkCapsule?.id === id ||
+    state.workCapsuleLibrary.some((capsule) => capsule.id === id)
   );
 }
 
