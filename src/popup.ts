@@ -52,8 +52,10 @@ import {
 } from "./workCapsules";
 
 type MessageNavigatorRole = "all" | Speaker;
+type Locale = "en" | "zh";
 
 interface PopupState {
+  locale: Locale;
   conversation: ConversationExport | null;
   selectedMessageIndexes: Set<number>;
   markdown: string;
@@ -74,6 +76,7 @@ interface PopupState {
 }
 
 const state: PopupState = {
+  locale: "en",
   conversation: null,
   selectedMessageIndexes: new Set(),
   markdown: "",
@@ -94,11 +97,362 @@ const state: PopupState = {
 };
 
 const NAVIGATOR_ROLES: MessageNavigatorRole[] = ["all", "user", "assistant", "system"];
-const NAVIGATOR_ROLE_LABELS: Record<MessageNavigatorRole, string> = {
+const LOCALE_STORAGE_KEY = "aiChatVaultLocale";
+const SUPPORTED_LOCALES: Locale[] = ["en", "zh"];
+const EN_MESSAGES = {
+  appAria: "AI Chat Vault popup",
+  subtitle: "Local Markdown export",
+  language: "Language",
+  exportActions: "Export actions",
+  capture: "Capture",
+  copy: "Copy",
+  download: "Download",
+  promptLibrary: "Prompt Library",
+  localSnippets: "Local snippets",
+  promptSnippet: "Prompt snippet",
+  promptSlashCommand: "Prompt slash command",
+  promptBody: "Prompt body",
+  promptBodyPlaceholder: "Prompt body",
+  newPrompt: "New",
+  save: "Save",
+  delete: "Delete",
+  copyPrompt: "Copy prompt",
+  insertPrompt: "Insert into ChatGPT",
+  conversationNotes: "Conversation Notes",
+  privateLocalNote: "Private local note",
+  conversationNote: "Conversation note",
+  conversationNotePlaceholder: "Private notes for this conversation",
+  conversationBookmarks: "Conversation Bookmarks",
+  localSavedLinks: "Local saved links",
+  saveBookmark: "Save bookmark",
+  savedConversationBookmarks: "Saved conversation bookmarks",
+  workCapsule: "Work Capsule",
+  localDraft: "Local draft",
+  bridgePreset: "Bridge preset",
+  workCapsuleBridgePreset: "Work capsule bridge preset",
+  createCapsule: "Create Capsule",
+  workCapsuleLibrary: "Work Capsule Library",
+  title: "Title",
+  project: "Project",
+  goal: "Goal",
+  contextPrompt: "Context prompt",
+  reusableContext: "Reusable context",
+  decisions: "Decisions",
+  constraints: "Constraints",
+  facts: "Facts",
+  openQuestions: "Open questions",
+  nextActions: "Next actions",
+  artifacts: "Artifacts",
+  workCapsuleTitle: "Work capsule title",
+  workCapsuleProject: "Work capsule project",
+  workCapsuleGoal: "Work capsule goal",
+  workCapsuleContextPrompt: "Work capsule context prompt",
+  workCapsuleReusableContext: "Work capsule reusable context",
+  workCapsuleDecisions: "Work capsule decisions",
+  workCapsuleConstraints: "Work capsule constraints",
+  workCapsuleFacts: "Work capsule facts",
+  workCapsuleOpenQuestions: "Work capsule open questions",
+  workCapsuleNextActions: "Work capsule next actions",
+  workCapsuleArtifacts: "Work capsule artifacts",
+  saveCapsule: "Save capsule",
+  copyContext: "Copy context",
+  copyMarkdown: "Copy Markdown",
+  copySource: "Copy source",
+  downloadCapsule: "Download capsule",
+  deleteCapsule: "Delete capsule",
+  messageNavigator: "Message Navigator",
+  zeroTurns: "0 of 0 turns",
+  searchCapturedMessages: "Search captured messages",
+  searchRoleOrText: "Search role or text",
+  filterMessagesByRole: "Filter messages by role",
+  navigatorResults: "Message Navigator results",
+  messageSelectionControls: "Message selection controls",
+  selectAll: "Select all",
+  selectNone: "Select none",
+  detectedMessages: "Detected messages",
+  markdownPreview: "Markdown preview",
+  markdownPreviewHeading: "Markdown Preview",
+  selectionOutput: "Selection output",
+  previewPlaceholder: "Open a ChatGPT conversation, click the extension icon, then Capture.",
+  ready: "Ready",
+  allRoles: "All roles",
+  userRole: "User",
+  assistantRole: "Assistant",
+  systemRole: "System",
+  noMatchingTurns: "No matching turns",
+  noSavedBookmarks: "No saved bookmarks",
+  copyLink: "Copy link",
+  library: "Library",
+  reopen: "Reopen",
+  reuse: "Reuse",
+  remove: "Remove",
+  unknownSource: "Unknown source",
+  exportFailed: "Export failed",
+  unsavedPromptChanges: "Unsaved prompt changes",
+  unsavedCapsuleChanges: "Unsaved capsule changes",
+  capturingActiveTab: "Capturing active ChatGPT tab...",
+  noActiveTab: "No active browser tab was found",
+  openChatGptBeforeCapturing: "Open a ChatGPT tab before capturing",
+  openChatGptBeforeInserting: "Open a ChatGPT tab before inserting a prompt",
+  unexpectedCaptureResponse: "Unexpected capture response",
+  unexpectedPromptResponse: "Unexpected prompt insertion response",
+  chatGptComposerNotFound: "ChatGPT composer was not found",
+  captureFailed: "Capture failed",
+  promptInsertionFailed: "Prompt insertion failed",
+  copiedMarkdown: "Copied Markdown to clipboard",
+  copiedPrompt: "Copied prompt to clipboard",
+  insertedPrompt: "Inserted prompt into ChatGPT",
+  downloadedMarkdown: "Downloaded Markdown file",
+  captureBeforeExporting: "Capture a conversation before exporting",
+  noMessagesToExport: "No messages were detected to export",
+  selectOneMessageToExport: "Select at least one message to export",
+  savedConversationNote: "Saved conversation note locally",
+  couldNotSaveConversationNote: "Could not save conversation note",
+  captureBeforeSavingBookmark: "Capture a conversation before saving a bookmark",
+  savedBookmark: "Saved conversation bookmark locally",
+  bookmarkNotFound: "Conversation bookmark was not found",
+  copiedBookmark: "Copied bookmark link to clipboard",
+  deletedBookmark: "Deleted conversation bookmark",
+  selectedMessage: "Selected message",
+  savedCapsule: "Saved capsule locally",
+  noSavedCapsuleForConversation: "No saved capsule is available for this conversation",
+  reopenedSavedCapsule: "Reopened saved capsule",
+  createdUnsavedCapsule: "Created unsaved capsule draft from saved capsule",
+  saveCapsuleBeforeDeleting: "Save the capsule before deleting it",
+  deleteCanceled: "Delete canceled; saved capsule kept locally",
+  deletedSavedCapsule: "Deleted saved capsule locally",
+  savedCapsuleIdMissing: "Saved capsule id is missing",
+  savedCapsuleNoLongerInLibrary: "Saved capsule is no longer in the library",
+  capsuleRemoveCanceled: "Capsule remove canceled",
+  removedSavedCapsule: "Removed saved capsule locally",
+  removedInvalidCapsule: "Removed missing or invalid saved capsule from library",
+  copiedSourceCitation: "Copied source citation to clipboard",
+  savedCapsuleLoadFailed: "Saved capsule could not be loaded",
+  copiedCapsuleMarkdown: "Copied capsule Markdown to clipboard",
+  createCapsuleBeforeAction: "Create a capsule draft before using capsule actions",
+  downloadedCapsuleMarkdown: "Downloaded capsule Markdown file",
+  untitledWorkCapsule: "Untitled Work Capsule",
+  defaultCapsuleGoal: "Capture reusable context from selected messages.",
+  currentConversation: "Current conversation",
+  workCapsuleDeleteUnavailable: "Work capsule delete button is unavailable",
+  captureBeforeReusingCapsule: "Capture a conversation before reusing a saved capsule",
+  noMessagesToReuse: "No messages were detected to reuse",
+  selectOneMessageToReuse: "Select at least one message to reuse",
+  newPromptSnippet: "New prompt snippet",
+  noPromptSelected: "No prompt snippet is selected",
+  addSlashCommand: "Add a slash command before saving",
+  addPromptBody: "Add a prompt body before saving",
+  savedPromptSnippet: "Saved prompt snippet locally",
+  deletedPromptSnippet: "Deleted prompt snippet",
+  promptBodyEmpty: "Prompt body is empty",
+  previewUnavailable: "Preview panel is unavailable",
+  promptSelectorUnavailable: "Prompt selector is unavailable",
+  promptTitleUnavailable: "Prompt title input is unavailable",
+  promptBodyUnavailable: "Prompt body input is unavailable",
+  notesSectionUnavailable: "Conversation notes section is unavailable",
+  noteInputUnavailable: "Conversation note input is unavailable",
+  notesContextUnavailable: "Conversation notes context is unavailable",
+  bookmarksSectionUnavailable: "Conversation bookmarks section is unavailable",
+  bookmarksContextUnavailable: "Conversation bookmarks context is unavailable",
+  bookmarkListUnavailable: "Conversation bookmark list is unavailable",
+  workCapsuleSectionUnavailable: "Work capsule section is unavailable",
+  workCapsuleFieldsUnavailable: "Work capsule fields are unavailable",
+  recentWorkCapsuleUnavailable: "Recent work capsule panel is unavailable",
+  workCapsuleLibraryUnavailable: "Work capsule library panel is unavailable",
+  workCapsulePresetUnavailable: "Work capsule preset selector is unavailable",
+  workCapsuleContextUnavailable: "Work capsule context is unavailable",
+  messageSelectionUnavailable: "Message selection panel is unavailable",
+  messageSearchUnavailable: "Message search is unavailable",
+  messageRoleFilterUnavailable: "Message role filter is unavailable",
+  navigatorCountUnavailable: "Message navigator count is unavailable",
+  navigatorResultsUnavailable: "Message navigator results are unavailable"
+} as const;
+const ZH_MESSAGES: Record<keyof typeof EN_MESSAGES, string> = {
+  appAria: "AI Chat Vault 弹窗",
+  subtitle: "本地 Markdown 导出",
+  language: "语言",
+  exportActions: "导出操作",
+  capture: "捕获",
+  copy: "复制",
+  download: "下载",
+  promptLibrary: "提示词库",
+  localSnippets: "本地片段",
+  promptSnippet: "提示词片段",
+  promptSlashCommand: "提示词斜杠命令",
+  promptBody: "提示词正文",
+  promptBodyPlaceholder: "提示词正文",
+  newPrompt: "新建",
+  save: "保存",
+  delete: "删除",
+  copyPrompt: "复制提示词",
+  insertPrompt: "插入到 ChatGPT",
+  conversationNotes: "对话笔记",
+  privateLocalNote: "本地私有笔记",
+  conversationNote: "对话笔记",
+  conversationNotePlaceholder: "这段对话的私有笔记",
+  conversationBookmarks: "对话书签",
+  localSavedLinks: "本地保存链接",
+  saveBookmark: "保存书签",
+  savedConversationBookmarks: "已保存的对话书签",
+  workCapsule: "工作胶囊",
+  localDraft: "本地草稿",
+  bridgePreset: "桥接预设",
+  workCapsuleBridgePreset: "工作胶囊桥接预设",
+  createCapsule: "创建胶囊",
+  workCapsuleLibrary: "工作胶囊库",
+  title: "标题",
+  project: "项目",
+  goal: "目标",
+  contextPrompt: "上下文提示词",
+  reusableContext: "可复用上下文",
+  decisions: "决策",
+  constraints: "约束",
+  facts: "事实",
+  openQuestions: "开放问题",
+  nextActions: "下一步行动",
+  artifacts: "产物",
+  workCapsuleTitle: "工作胶囊标题",
+  workCapsuleProject: "工作胶囊项目",
+  workCapsuleGoal: "工作胶囊目标",
+  workCapsuleContextPrompt: "工作胶囊上下文提示词",
+  workCapsuleReusableContext: "工作胶囊可复用上下文",
+  workCapsuleDecisions: "工作胶囊决策",
+  workCapsuleConstraints: "工作胶囊约束",
+  workCapsuleFacts: "工作胶囊事实",
+  workCapsuleOpenQuestions: "工作胶囊开放问题",
+  workCapsuleNextActions: "工作胶囊下一步行动",
+  workCapsuleArtifacts: "工作胶囊产物",
+  saveCapsule: "保存胶囊",
+  copyContext: "复制上下文",
+  copyMarkdown: "复制 Markdown",
+  copySource: "复制来源",
+  downloadCapsule: "下载胶囊",
+  deleteCapsule: "删除胶囊",
+  messageNavigator: "消息导航",
+  zeroTurns: "0 / 0 轮",
+  searchCapturedMessages: "搜索已捕获消息",
+  searchRoleOrText: "搜索角色或内容",
+  filterMessagesByRole: "按角色筛选消息",
+  navigatorResults: "消息导航结果",
+  messageSelectionControls: "消息选择控件",
+  selectAll: "全选",
+  selectNone: "全不选",
+  detectedMessages: "检测到的消息",
+  markdownPreview: "Markdown 预览",
+  markdownPreviewHeading: "Markdown 预览",
+  selectionOutput: "选择输出",
+  previewPlaceholder: "打开 ChatGPT 对话，点击扩展图标，然后捕获。",
+  ready: "就绪",
+  allRoles: "全部角色",
+  userRole: "用户",
+  assistantRole: "助手",
+  systemRole: "系统",
+  noMatchingTurns: "没有匹配轮次",
+  noSavedBookmarks: "暂无保存书签",
+  copyLink: "复制链接",
+  library: "库",
+  reopen: "重新打开",
+  reuse: "复用",
+  remove: "移除",
+  unknownSource: "未知来源",
+  exportFailed: "导出失败",
+  unsavedPromptChanges: "提示词有未保存更改",
+  unsavedCapsuleChanges: "胶囊有未保存更改",
+  capturingActiveTab: "正在捕获当前 ChatGPT 标签页...",
+  noActiveTab: "没有找到当前浏览器标签页",
+  openChatGptBeforeCapturing: "捕获前请先打开 ChatGPT 标签页",
+  openChatGptBeforeInserting: "插入提示词前请先打开 ChatGPT 标签页",
+  unexpectedCaptureResponse: "捕获响应异常",
+  unexpectedPromptResponse: "提示词插入响应异常",
+  chatGptComposerNotFound: "未找到 ChatGPT 输入框",
+  captureFailed: "捕获失败",
+  promptInsertionFailed: "提示词插入失败",
+  copiedMarkdown: "已复制 Markdown 到剪贴板",
+  copiedPrompt: "已复制提示词到剪贴板",
+  insertedPrompt: "已插入提示词到 ChatGPT",
+  downloadedMarkdown: "已下载 Markdown 文件",
+  captureBeforeExporting: "导出前请先捕获对话",
+  noMessagesToExport: "没有检测到可导出的消息",
+  selectOneMessageToExport: "至少选择一条消息再导出",
+  savedConversationNote: "已在本地保存对话笔记",
+  couldNotSaveConversationNote: "无法保存对话笔记",
+  captureBeforeSavingBookmark: "保存书签前请先捕获对话",
+  savedBookmark: "已在本地保存对话书签",
+  bookmarkNotFound: "未找到对话书签",
+  copiedBookmark: "已复制书签链接到剪贴板",
+  deletedBookmark: "已删除对话书签",
+  selectedMessage: "已选消息",
+  savedCapsule: "已在本地保存胶囊",
+  noSavedCapsuleForConversation: "这段对话没有可用的已保存胶囊",
+  reopenedSavedCapsule: "已重新打开保存的胶囊",
+  createdUnsavedCapsule: "已从保存的胶囊创建未保存草稿",
+  saveCapsuleBeforeDeleting: "删除前请先保存胶囊",
+  deleteCanceled: "已取消删除；本地保存的胶囊已保留",
+  deletedSavedCapsule: "已删除本地保存的胶囊",
+  savedCapsuleIdMissing: "缺少已保存胶囊 id",
+  savedCapsuleNoLongerInLibrary: "保存的胶囊已不在库中",
+  capsuleRemoveCanceled: "已取消移除胶囊",
+  removedSavedCapsule: "已移除本地保存的胶囊",
+  removedInvalidCapsule: "已从库中移除缺失或无效的胶囊",
+  copiedSourceCitation: "已复制来源引用到剪贴板",
+  savedCapsuleLoadFailed: "无法加载保存的胶囊",
+  copiedCapsuleMarkdown: "已复制胶囊 Markdown 到剪贴板",
+  createCapsuleBeforeAction: "使用胶囊操作前请先创建胶囊草稿",
+  downloadedCapsuleMarkdown: "已下载胶囊 Markdown 文件",
+  untitledWorkCapsule: "未命名工作胶囊",
+  defaultCapsuleGoal: "从已选消息中捕获可复用上下文。",
+  currentConversation: "当前对话",
+  workCapsuleDeleteUnavailable: "工作胶囊删除按钮不可用",
+  captureBeforeReusingCapsule: "复用保存的胶囊前请先捕获对话",
+  noMessagesToReuse: "没有检测到可复用的消息",
+  selectOneMessageToReuse: "至少选择一条消息再复用",
+  newPromptSnippet: "新建提示词片段",
+  noPromptSelected: "未选择提示词片段",
+  addSlashCommand: "保存前请添加斜杠命令",
+  addPromptBody: "保存前请添加提示词正文",
+  savedPromptSnippet: "已在本地保存提示词片段",
+  deletedPromptSnippet: "已删除提示词片段",
+  promptBodyEmpty: "提示词正文为空",
+  previewUnavailable: "预览面板不可用",
+  promptSelectorUnavailable: "提示词选择器不可用",
+  promptTitleUnavailable: "提示词标题输入框不可用",
+  promptBodyUnavailable: "提示词正文输入框不可用",
+  notesSectionUnavailable: "对话笔记区域不可用",
+  noteInputUnavailable: "对话笔记输入框不可用",
+  notesContextUnavailable: "对话笔记上下文不可用",
+  bookmarksSectionUnavailable: "对话书签区域不可用",
+  bookmarksContextUnavailable: "对话书签上下文不可用",
+  bookmarkListUnavailable: "对话书签列表不可用",
+  workCapsuleSectionUnavailable: "工作胶囊区域不可用",
+  workCapsuleFieldsUnavailable: "工作胶囊字段不可用",
+  recentWorkCapsuleUnavailable: "最近工作胶囊面板不可用",
+  workCapsuleLibraryUnavailable: "工作胶囊库面板不可用",
+  workCapsulePresetUnavailable: "工作胶囊预设选择器不可用",
+  workCapsuleContextUnavailable: "工作胶囊上下文不可用",
+  messageSelectionUnavailable: "消息选择面板不可用",
+  messageSearchUnavailable: "消息搜索不可用",
+  messageRoleFilterUnavailable: "消息角色筛选不可用",
+  navigatorCountUnavailable: "消息导航计数不可用",
+  navigatorResultsUnavailable: "消息导航结果不可用"
+};
+const UI_MESSAGES = {
+  en: EN_MESSAGES,
+  zh: ZH_MESSAGES
+};
+type UiMessageKey = keyof typeof EN_MESSAGES;
+const NAVIGATOR_ROLE_LABELS: Record<Locale, Record<MessageNavigatorRole, string>> = {
+  en: {
   all: "All roles",
   user: "User",
   assistant: "Assistant",
   system: "System"
+  },
+  zh: {
+    all: "全部角色",
+    user: "用户",
+    assistant: "助手",
+    system: "系统"
+  }
 };
 const WORK_CAPSULE_LIBRARY_LIMIT = 5;
 
@@ -110,146 +464,278 @@ function initPopup(): void {
     return;
   }
 
-  root.innerHTML = `
-    <main class="acv-popup" aria-label="AI Chat Vault popup">
-      <header class="acv-header">
-        <div>
-          <strong>AI Chat Vault</strong>
-          <span>Local Markdown export</span>
-        </div>
-      </header>
-      <section class="acv-actions" aria-label="Export actions">
-        <button type="button" data-acv-action="capture">Capture</button>
-        <button type="button" data-acv-action="copy">Copy</button>
-        <button type="button" data-acv-action="download">Download</button>
-      </section>
-      <section class="acv-prompt-library" aria-label="Prompt Library">
-        <div class="acv-section-heading">
-          <strong>Prompt Library</strong>
-          <span>Local snippets</span>
-        </div>
-        <select aria-label="Prompt snippet" data-acv-prompt-select></select>
-        <input type="text" aria-label="Prompt slash command" data-acv-prompt-title placeholder="/shortcut" />
-        <textarea aria-label="Prompt body" data-acv-prompt-body data-acv-prompt-preview placeholder="Prompt body"></textarea>
-        <div class="acv-prompt-edit-actions">
-          <button type="button" data-acv-action="new-prompt">New</button>
-          <button type="button" data-acv-action="save-prompt">Save</button>
-          <button type="button" data-acv-action="delete-prompt">Delete</button>
-        </div>
-        <div class="acv-prompt-actions">
-          <button type="button" data-acv-action="copy-prompt">Copy prompt</button>
-          <button type="button" data-acv-action="insert-prompt">Insert into ChatGPT</button>
-        </div>
-      </section>
-      <section class="acv-conversation-notes" aria-label="Conversation Notes" hidden>
-        <div class="acv-section-heading">
-          <strong>Conversation Notes</strong>
-          <span data-acv-notes-context>Private local note</span>
-        </div>
-        <textarea aria-label="Conversation note" data-acv-conversation-note placeholder="Private notes for this conversation"></textarea>
-      </section>
-      <section class="acv-conversation-bookmarks" aria-label="Conversation Bookmarks" hidden>
-        <div class="acv-section-heading">
-          <strong>Conversation Bookmarks</strong>
-          <span data-acv-bookmarks-context>Local saved links</span>
-        </div>
-        <button type="button" data-acv-action="save-bookmark">Save bookmark</button>
-        <div class="acv-bookmark-list" aria-label="Saved conversation bookmarks"></div>
-      </section>
-      <section class="acv-work-capsule" aria-label="Work Capsule" hidden>
-        <div class="acv-section-heading">
-          <strong>Work Capsule</strong>
-          <span data-acv-work-capsule-context>Local draft</span>
-        </div>
-        <label class="acv-work-capsule-preset">
-          <span>Bridge preset</span>
-          <select data-acv-capsule-preset aria-label="Work capsule bridge preset"></select>
-        </label>
-        <button type="button" data-acv-action="create-capsule">Create Capsule</button>
-        <div class="acv-work-capsule-recent" hidden></div>
-        <div class="acv-work-capsule-library" aria-label="Work Capsule Library" hidden></div>
-        <div class="acv-work-capsule-fields" hidden>
-          <label>
-            <span>Title</span>
-            <input type="text" data-acv-capsule-field="title" aria-label="Work capsule title" />
-          </label>
-          <label>
-            <span>Project</span>
-            <input type="text" data-acv-capsule-field="project" aria-label="Work capsule project" />
-          </label>
-          <label>
-            <span>Goal</span>
-            <textarea data-acv-capsule-field="goal" aria-label="Work capsule goal"></textarea>
-          </label>
-          <label>
-            <span>Context prompt</span>
-            <textarea data-acv-capsule-field="contextPrompt" aria-label="Work capsule context prompt"></textarea>
-          </label>
-          <label>
-            <span>Reusable context</span>
-            <textarea data-acv-capsule-field="reusableContext" aria-label="Work capsule reusable context"></textarea>
-          </label>
-          <label>
-            <span>Decisions</span>
-            <textarea data-acv-capsule-field="decisions" aria-label="Work capsule decisions"></textarea>
-          </label>
-          <label>
-            <span>Constraints</span>
-            <textarea data-acv-capsule-field="constraints" aria-label="Work capsule constraints"></textarea>
-          </label>
-          <label>
-            <span>Facts</span>
-            <textarea data-acv-capsule-field="facts" aria-label="Work capsule facts"></textarea>
-          </label>
-          <label>
-            <span>Open questions</span>
-            <textarea data-acv-capsule-field="openQuestions" aria-label="Work capsule open questions"></textarea>
-          </label>
-          <label>
-            <span>Next actions</span>
-            <textarea data-acv-capsule-field="nextActions" aria-label="Work capsule next actions"></textarea>
-          </label>
-          <label>
-            <span>Artifacts</span>
-            <textarea data-acv-capsule-field="artifacts" aria-label="Work capsule artifacts"></textarea>
-          </label>
-          <div class="acv-work-capsule-actions">
-            <button type="button" data-acv-action="save-capsule">Save capsule</button>
-            <button type="button" data-acv-action="copy-capsule-context">Copy context</button>
-            <button type="button" data-acv-action="copy-capsule-markdown">Copy Markdown</button>
-            <button type="button" data-acv-action="copy-capsule-source-citation">Copy source</button>
-            <button type="button" data-acv-action="download-capsule">Download capsule</button>
-            <button type="button" data-acv-action="delete-capsule" data-acv-capsule-draft-action="true" hidden>Delete capsule</button>
-          </div>
-        </div>
-      </section>
-      <section class="acv-message-panel" hidden>
-        <section class="acv-message-navigator" aria-label="Message Navigator">
-          <div class="acv-section-heading">
-            <strong>Message Navigator</strong>
-            <span data-acv-navigator-count>0 of 0 turns</span>
-          </div>
-          <div class="acv-navigator-filters">
-            <input type="search" aria-label="Search captured messages" data-acv-message-search placeholder="Search role or text" />
-            <select aria-label="Filter messages by role" data-acv-role-filter></select>
-          </div>
-          <div class="acv-navigator-results" aria-label="Message Navigator results"></div>
-        </section>
-        <div class="acv-selection-actions" aria-label="Message selection controls">
-          <button type="button" data-acv-action="select-all">Select all</button>
-          <button type="button" data-acv-action="select-none">Select none</button>
-        </div>
-        <div class="acv-message-list" aria-label="Detected messages"></div>
-      </section>
-      <textarea readonly aria-label="Markdown preview" class="acv-markdown-preview" placeholder="Open a ChatGPT conversation, click the extension icon, then Capture."></textarea>
-      <div class="acv-status" role="status" aria-live="polite">Ready</div>
-    </main>
-  `;
-
+  renderPopupShell(root);
   root.addEventListener("click", handlePopupClick);
   root.addEventListener("input", handlePopupInput);
   root.addEventListener("change", handlePopupChange);
-  void loadPromptLibrary();
+  void initializePopup();
+}
+
+async function initializePopup(): Promise<void> {
+  const locale = await loadStoredLocale();
+  if (locale !== state.locale) {
+    state.locale = locale;
+    renderPopupShell();
+  }
+
+  await loadPromptLibrary();
+  setStatus(t("ready"));
+}
+
+function renderPopupShell(root = popupRoot()): void {
+  document.documentElement.lang = state.locale;
+  root.innerHTML = `
+    <main class="acv-popup" aria-label="${t("appAria")}">
+      <header class="acv-header">
+        <div class="acv-titlebar">
+          <div class="acv-brand">
+            <strong>AI Chat Vault</strong>
+            <span>${t("subtitle")}</span>
+          </div>
+          <label class="acv-locale-switch">
+            <span>${t("language")}</span>
+            <select data-acv-locale-select aria-label="${t("language")}">
+              <option value="en"${state.locale === "en" ? " selected" : ""}>English</option>
+              <option value="zh"${state.locale === "zh" ? " selected" : ""}>中文</option>
+            </select>
+          </label>
+        </div>
+        <section class="acv-actions" aria-label="${t("exportActions")}">
+          <button class="acv-primary-action" type="button" data-acv-action="capture">${t("capture")}</button>
+          <button type="button" data-acv-action="copy">${t("copy")}</button>
+          <button type="button" data-acv-action="download">${t("download")}</button>
+        </section>
+      </header>
+      <div class="acv-content">
+      <section class="acv-panel acv-prompt-library" aria-label="${t("promptLibrary")}">
+        <div class="acv-section-heading">
+          <strong>${t("promptLibrary")}</strong>
+          <span>${t("localSnippets")}</span>
+        </div>
+        <select aria-label="${t("promptSnippet")}" data-acv-prompt-select></select>
+        <input type="text" aria-label="${t("promptSlashCommand")}" data-acv-prompt-title placeholder="/shortcut" />
+        <textarea aria-label="${t("promptBody")}" data-acv-prompt-body data-acv-prompt-preview placeholder="${t("promptBodyPlaceholder")}"></textarea>
+        <div class="acv-prompt-edit-actions">
+          <button type="button" data-acv-action="new-prompt">${t("newPrompt")}</button>
+          <button type="button" data-acv-action="save-prompt">${t("save")}</button>
+          <button type="button" data-acv-action="delete-prompt">${t("delete")}</button>
+        </div>
+        <div class="acv-prompt-actions">
+          <button type="button" data-acv-action="copy-prompt">${t("copyPrompt")}</button>
+          <button type="button" data-acv-action="insert-prompt">${t("insertPrompt")}</button>
+        </div>
+      </section>
+      <section class="acv-panel acv-conversation-notes" aria-label="${t("conversationNotes")}" hidden>
+        <div class="acv-section-heading">
+          <strong>${t("conversationNotes")}</strong>
+          <span data-acv-notes-context>${t("privateLocalNote")}</span>
+        </div>
+        <textarea aria-label="${t("conversationNote")}" data-acv-conversation-note placeholder="${t("conversationNotePlaceholder")}"></textarea>
+      </section>
+      <section class="acv-panel acv-conversation-bookmarks" aria-label="${t("conversationBookmarks")}" hidden>
+        <div class="acv-section-heading">
+          <strong>${t("conversationBookmarks")}</strong>
+          <span data-acv-bookmarks-context>${t("localSavedLinks")}</span>
+        </div>
+        <button type="button" data-acv-action="save-bookmark">${t("saveBookmark")}</button>
+        <div class="acv-bookmark-list" aria-label="${t("savedConversationBookmarks")}"></div>
+      </section>
+      <section class="acv-panel acv-work-capsule" aria-label="${t("workCapsule")}" hidden>
+        <div class="acv-section-heading">
+          <strong>${t("workCapsule")}</strong>
+          <span data-acv-work-capsule-context>${t("localDraft")}</span>
+        </div>
+        <label class="acv-work-capsule-preset">
+          <span>${t("bridgePreset")}</span>
+          <select data-acv-capsule-preset aria-label="${t("workCapsuleBridgePreset")}"></select>
+        </label>
+        <button type="button" data-acv-action="create-capsule">${t("createCapsule")}</button>
+        <div class="acv-work-capsule-recent" hidden></div>
+        <div class="acv-work-capsule-library" aria-label="${t("workCapsuleLibrary")}" hidden></div>
+        <div class="acv-work-capsule-fields" hidden>
+          <label>
+            <span>${t("title")}</span>
+            <input type="text" data-acv-capsule-field="title" aria-label="${t("workCapsuleTitle")}" />
+          </label>
+          <label>
+            <span>${t("project")}</span>
+            <input type="text" data-acv-capsule-field="project" aria-label="${t("workCapsuleProject")}" />
+          </label>
+          <label>
+            <span>${t("goal")}</span>
+            <textarea data-acv-capsule-field="goal" aria-label="${t("workCapsuleGoal")}"></textarea>
+          </label>
+          <label>
+            <span>${t("contextPrompt")}</span>
+            <textarea data-acv-capsule-field="contextPrompt" aria-label="${t("workCapsuleContextPrompt")}"></textarea>
+          </label>
+          <label>
+            <span>${t("reusableContext")}</span>
+            <textarea data-acv-capsule-field="reusableContext" aria-label="${t("workCapsuleReusableContext")}"></textarea>
+          </label>
+          <label>
+            <span>${t("decisions")}</span>
+            <textarea data-acv-capsule-field="decisions" aria-label="${t("workCapsuleDecisions")}"></textarea>
+          </label>
+          <label>
+            <span>${t("constraints")}</span>
+            <textarea data-acv-capsule-field="constraints" aria-label="${t("workCapsuleConstraints")}"></textarea>
+          </label>
+          <label>
+            <span>${t("facts")}</span>
+            <textarea data-acv-capsule-field="facts" aria-label="${t("workCapsuleFacts")}"></textarea>
+          </label>
+          <label>
+            <span>${t("openQuestions")}</span>
+            <textarea data-acv-capsule-field="openQuestions" aria-label="${t("workCapsuleOpenQuestions")}"></textarea>
+          </label>
+          <label>
+            <span>${t("nextActions")}</span>
+            <textarea data-acv-capsule-field="nextActions" aria-label="${t("workCapsuleNextActions")}"></textarea>
+          </label>
+          <label>
+            <span>${t("artifacts")}</span>
+            <textarea data-acv-capsule-field="artifacts" aria-label="${t("workCapsuleArtifacts")}"></textarea>
+          </label>
+          <div class="acv-work-capsule-actions">
+            <button type="button" data-acv-action="save-capsule">${t("saveCapsule")}</button>
+            <button type="button" data-acv-action="copy-capsule-context">${t("copyContext")}</button>
+            <button type="button" data-acv-action="copy-capsule-markdown">${t("copyMarkdown")}</button>
+            <button type="button" data-acv-action="copy-capsule-source-citation">${t("copySource")}</button>
+            <button type="button" data-acv-action="download-capsule">${t("downloadCapsule")}</button>
+            <button type="button" data-acv-action="delete-capsule" data-acv-capsule-draft-action="true" hidden>${t("deleteCapsule")}</button>
+          </div>
+        </div>
+      </section>
+      <section class="acv-panel acv-message-panel" hidden>
+        <section class="acv-message-navigator" aria-label="${t("messageNavigator")}">
+          <div class="acv-section-heading">
+            <strong>${t("messageNavigator")}</strong>
+            <span data-acv-navigator-count>${t("zeroTurns")}</span>
+          </div>
+          <div class="acv-navigator-filters">
+            <input type="search" aria-label="${t("searchCapturedMessages")}" data-acv-message-search placeholder="${t("searchRoleOrText")}" />
+            <select aria-label="${t("filterMessagesByRole")}" data-acv-role-filter></select>
+          </div>
+          <div class="acv-navigator-results" aria-label="${t("navigatorResults")}"></div>
+        </section>
+        <div class="acv-selection-actions" aria-label="${t("messageSelectionControls")}">
+          <button type="button" data-acv-action="select-all">${t("selectAll")}</button>
+          <button type="button" data-acv-action="select-none">${t("selectNone")}</button>
+        </div>
+        <div class="acv-message-list" aria-label="${t("detectedMessages")}"></div>
+      </section>
+      <section class="acv-panel acv-preview-panel" aria-label="${t("markdownPreview")}">
+        <div class="acv-section-heading">
+          <strong>${t("markdownPreviewHeading")}</strong>
+          <span>${t("selectionOutput")}</span>
+        </div>
+        <textarea readonly aria-label="Markdown preview" class="acv-markdown-preview" placeholder="${t("previewPlaceholder")}"></textarea>
+      </section>
+      </div>
+      <div class="acv-status" role="status" aria-live="polite">${t("ready")}</div>
+    </main>
+  `;
+}
+
+function renderPopupState(): void {
+  renderPromptLibrary();
+  preview().value = state.markdown;
+
+  if (!state.conversation) {
+    return;
+  }
+
+  renderConversationNotes();
+  renderConversationBookmarks();
+  renderWorkCapsuleSection();
+  renderMessageList(state.conversation.messages);
+  renderMessageNavigator();
+}
+
+async function updateLocale(locale: Locale): Promise<void> {
+  if (locale === state.locale) {
+    return;
+  }
+
+  state.locale = locale;
+  await saveStoredLocale(locale);
+  renderPopupShell();
+  renderPopupState();
+  setStatus(t("ready"));
+}
+
+function t(key: UiMessageKey): string {
+  return UI_MESSAGES[state.locale][key] ?? EN_MESSAGES[key];
+}
+
+function navigatorRoleLabel(role: MessageNavigatorRole): string {
+  return NAVIGATOR_ROLE_LABELS[state.locale][role];
+}
+
+function localeFromValue(value: string): Locale {
+  return SUPPORTED_LOCALES.includes(value as Locale) ? (value as Locale) : "en";
+}
+
+async function loadStoredLocale(): Promise<Locale> {
+  const storage = chromeStorageLocal();
+  if (!storage) {
+    return "en";
+  }
+
+  try {
+    const storedValue = await storageGet(storage, LOCALE_STORAGE_KEY);
+    return localeFromValue(typeof storedValue === "string" ? storedValue : "");
+  } catch {
+    return "en";
+  }
+}
+
+async function saveStoredLocale(locale: Locale): Promise<void> {
+  const storage = chromeStorageLocal();
+  if (!storage) {
+    return;
+  }
+
+  await storageSet(storage, { [LOCALE_STORAGE_KEY]: locale }).catch(() => undefined);
+}
+
+type ChromeStorageLocal = Pick<chrome.storage.StorageArea, "get" | "set">;
+
+function chromeStorageLocal(): ChromeStorageLocal | null {
+  const maybeChrome = globalThis.chrome;
+  return maybeChrome?.storage?.local ?? null;
+}
+
+function storageGet(storage: ChromeStorageLocal, key: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    storage.get(key, (items) => {
+      const lastError = globalThis.chrome?.runtime?.lastError;
+      if (lastError) {
+        reject(new Error(lastError.message));
+        return;
+      }
+
+      resolve(items[key]);
+    });
+  });
+}
+
+function storageSet(
+  storage: ChromeStorageLocal,
+  items: Record<string, Locale>
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    storage.set(items, () => {
+      const lastError = globalThis.chrome?.runtime?.lastError;
+      if (lastError) {
+        reject(new Error(lastError.message));
+        return;
+      }
+
+      resolve();
+    });
+  });
 }
 
 async function handlePopupClick(event: MouseEvent): Promise<void> {
@@ -401,7 +887,7 @@ async function handlePopupClick(event: MouseEvent): Promise<void> {
       downloadMarkdown();
     }
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : "Export failed");
+    setStatus(error instanceof Error ? error.message : t("exportFailed"));
   }
 }
 
@@ -420,7 +906,7 @@ function handlePopupInput(event: Event): void {
   );
   if (promptTitle) {
     updateSelectedPromptSnippet({ title: promptTitle.value });
-    setStatus("Unsaved prompt changes");
+    setStatus(t("unsavedPromptChanges"));
     return;
   }
 
@@ -429,7 +915,7 @@ function handlePopupInput(event: Event): void {
   );
   if (promptBody) {
     updateSelectedPromptSnippet({ body: promptBody.value });
-    setStatus("Unsaved prompt changes");
+    setStatus(t("unsavedPromptChanges"));
     return;
   }
 
@@ -441,7 +927,7 @@ function handlePopupInput(event: Event): void {
       state.workCapsuleContextPromptEdited = true;
     }
     updateWorkCapsuleDraftFromFields();
-    setStatus("Unsaved capsule changes");
+    setStatus(t("unsavedCapsuleChanges"));
     return;
   }
 
@@ -457,6 +943,14 @@ function handlePopupInput(event: Event): void {
 }
 
 function handlePopupChange(event: Event): void {
+  const localeSelect = (event.target as HTMLElement).closest<HTMLSelectElement>(
+    "select[data-acv-locale-select]"
+  );
+  if (localeSelect) {
+    void updateLocale(localeFromValue(localeSelect.value));
+    return;
+  }
+
   const select = (event.target as HTMLElement).closest<HTMLSelectElement>(
     "select[data-acv-prompt-select]"
   );
@@ -504,7 +998,7 @@ function handlePopupChange(event: Event): void {
 
   if (isWorkCapsuleOutputPresetId(presetSelect.value)) {
     state.workCapsuleOutputPresetId = presetSelect.value;
-    setStatus(`Selected ${selectedWorkCapsuleOutputPresetName()}`);
+    setStatus(selectedWorkCapsulePresetStatus());
   }
 }
 
@@ -515,20 +1009,20 @@ async function loadPromptLibrary(): Promise<void> {
 }
 
 async function captureFromActiveTab(): Promise<void> {
-  setStatus("Capturing active ChatGPT tab...");
+  setStatus(t("capturingActiveTab"));
   const tab = await activeTab();
   if (!tab.id) {
-    throw new Error("No active browser tab was found");
+    throw new Error(t("noActiveTab"));
   }
 
   const url = new URL(tab.url ?? "about:blank");
   if (!isSupportedChatGptHost(url.hostname)) {
-    throw new Error("Open a ChatGPT tab before capturing");
+    throw new Error(t("openChatGptBeforeCapturing"));
   }
 
   const response = await sendCaptureMessage(tab.id);
   if (response.type !== CAPTURE_RESPONSE_TYPE) {
-    throw new Error("Unexpected capture response");
+    throw new Error(t("unexpectedCaptureResponse"));
   }
 
   if ("error" in response && response.error) {
@@ -549,7 +1043,7 @@ function activeTab(): Promise<chrome.tabs.Tab> {
 
       const tab = tabs[0];
       if (!tab) {
-        reject(new Error("No active browser tab was found"));
+        reject(new Error(t("noActiveTab")));
         return;
       }
 
@@ -588,7 +1082,7 @@ function sendInsertPromptMessage(
       (response) => {
         const lastError = chrome.runtime.lastError;
         if (lastError) {
-          reject(new Error(messageBridgeError(lastError.message, "inserting", "Prompt insertion failed")));
+          reject(new Error(messageBridgeError(lastError.message, "inserting", t("promptInsertionFailed"))));
           return;
         }
 
@@ -604,7 +1098,7 @@ function sendInsertPromptMessage(
 }
 
 function captureMessageError(message?: string): string {
-  return messageBridgeError(message, "Capture", "Capture failed");
+  return messageBridgeError(message, "Capture", t("captureFailed"));
 }
 
 function messageBridgeError(
@@ -623,6 +1117,11 @@ function messageBridgeError(
 }
 
 function reloadChatGptTabMessage(retryAction = "Capture"): string {
+  if (state.locale === "zh") {
+    const action = retryAction === "inserting" ? "插入" : "捕获";
+    return `安装或更新 AI Chat Vault 后请重新加载 ChatGPT 标签页，然后重试${action}。`;
+  }
+
   return `Reload the ChatGPT tab after installing or updating AI Chat Vault, then try ${retryAction} again.`;
 }
 
@@ -655,36 +1154,36 @@ async function updateCapturedConversation(conversation: ConversationExport): Pro
   renderWorkCapsuleSection();
   renderMessageList(conversation.messages);
   renderMessageNavigator();
-  setStatus(`Captured ${conversation.messages.length} message${conversation.messages.length === 1 ? "" : "s"}`);
+  setStatus(capturedMessagesStatus(conversation.messages.length));
 }
 
 async function copyMarkdown(): Promise<void> {
   const markdown = selectedMarkdown();
   await navigator.clipboard.writeText(markdown);
-  setStatus("Copied Markdown to clipboard");
+  setStatus(t("copiedMarkdown"));
 }
 
 async function copySelectedPrompt(): Promise<void> {
   const prompt = selectedPromptBody();
   await navigator.clipboard.writeText(prompt);
-  setStatus("Copied prompt to clipboard");
+  setStatus(t("copiedPrompt"));
 }
 
 async function insertSelectedPromptIntoChatGpt(): Promise<void> {
   const prompt = selectedPromptBody();
   const tab = await activeTab();
   if (!tab.id) {
-    throw new Error("No active browser tab was found");
+    throw new Error(t("noActiveTab"));
   }
 
   const url = new URL(tab.url ?? "about:blank");
   if (!isSupportedChatGptHost(url.hostname)) {
-    throw new Error("Open a ChatGPT tab before inserting a prompt");
+    throw new Error(t("openChatGptBeforeInserting"));
   }
 
   const response = await sendInsertPromptMessage(tab.id, prompt);
   if (response.type !== INSERT_PROMPT_RESPONSE_TYPE) {
-    throw new Error("Unexpected prompt insertion response");
+    throw new Error(t("unexpectedPromptResponse"));
   }
 
   if ("error" in response && response.error) {
@@ -692,16 +1191,16 @@ async function insertSelectedPromptIntoChatGpt(): Promise<void> {
   }
 
   if (!response.inserted) {
-    throw new Error("ChatGPT composer was not found");
+    throw new Error(t("chatGptComposerNotFound"));
   }
 
-  setStatus("Inserted prompt into ChatGPT");
+  setStatus(t("insertedPrompt"));
 }
 
 function downloadMarkdown(): void {
   const markdown = selectedMarkdown();
   downloadTextFile(markdown, markdownFilename(state.title));
-  setStatus("Downloaded Markdown file");
+  setStatus(t("downloadedMarkdown"));
 }
 
 function downloadTextFile(text: string, filename: string): void {
@@ -723,16 +1222,16 @@ function selectedMarkdown(): string {
 
 function selectedConversation(): ConversationExport {
   if (!state.conversation) {
-    throw new Error("Capture a conversation before exporting");
+    throw new Error(t("captureBeforeExporting"));
   }
 
   if (state.conversation.messages.length === 0) {
-    throw new Error("No messages were detected to export");
+    throw new Error(t("noMessagesToExport"));
   }
 
   const conversation = filterConversationMessages(state.conversation, state.selectedMessageIndexes);
   if (conversation.messages.length === 0) {
-    throw new Error("Select at least one message to export");
+    throw new Error(t("selectOneMessageToExport"));
   }
 
   return conversation;
@@ -748,8 +1247,8 @@ function updatePreviewFromSelection(): void {
   preview().value = state.markdown;
   setStatus(
     conversation.messages.length > 0
-      ? `Selected ${conversation.messages.length} of ${state.conversation.messages.length} messages`
-      : "Select at least one message to export"
+      ? selectedMessagesStatus(conversation.messages.length, state.conversation.messages.length)
+      : t("selectOneMessageToExport")
   );
 }
 
@@ -825,17 +1324,17 @@ function renderMessageNavigator(): void {
   results.textContent = "";
 
   if (!conversation) {
-    count.textContent = "0 of 0 turns";
+    count.textContent = t("zeroTurns");
     return;
   }
 
   const resultIndexes = filteredNavigatorMessageIndexes(conversation);
-  count.textContent = `${resultIndexes.length} of ${conversation.messages.length} turns`;
+  count.textContent = navigatorCountText(resultIndexes.length, conversation.messages.length);
 
   if (resultIndexes.length === 0) {
     const empty = document.createElement("div");
     empty.className = "acv-navigator-empty";
-    empty.textContent = "No matching turns";
+    empty.textContent = t("noMatchingTurns");
     results.append(empty);
     syncFocusedMessage();
     return;
@@ -850,7 +1349,7 @@ function renderMessageNavigator(): void {
     result.dataset.acvFocusMessageIndex = String(messageIndex);
 
     const title = document.createElement("strong");
-    title.textContent = `${messageIndex + 1}. ${NAVIGATOR_ROLE_LABELS[message.speaker]}`;
+    title.textContent = `${messageIndex + 1}. ${navigatorRoleLabel(message.speaker)}`;
 
     const previewText = document.createElement("span");
     previewText.textContent = shortMessagePreview(message, 72);
@@ -874,7 +1373,7 @@ function renderNavigatorRoleOptions(select: HTMLSelectElement): void {
   NAVIGATOR_ROLES.forEach((role) => {
     const option = document.createElement("option");
     option.value = role;
-    option.textContent = `${NAVIGATOR_ROLE_LABELS[role]} (${counts[role]})`;
+    option.textContent = `${navigatorRoleLabel(role)} (${counts[role]})`;
     select.append(option);
   });
 
@@ -927,7 +1426,7 @@ function focusMessage(messageIndex: number): void {
     row.scrollIntoView({ block: "nearest" });
   }
   row?.focus({ preventScroll: true });
-  setStatus(`Focused message ${messageIndex + 1} of ${state.conversation.messages.length}`);
+  setStatus(focusedMessageStatus(messageIndex + 1, state.conversation.messages.length));
 }
 
 function renderConversationNotes(): void {
@@ -939,7 +1438,7 @@ function renderConversationNotes(): void {
   note.value = state.conversationNote;
   context.textContent = state.conversation
     ? shortConversationContext(state.conversation)
-    : "Private local note";
+    : t("privateLocalNote");
 
   if (state.conversation) {
     section.dataset.acvNotesIdentity = state.conversationNoteIdentity;
@@ -959,16 +1458,16 @@ async function saveCurrentConversationNote(): Promise<void> {
 
   try {
     await saveConversationNote(conversation, note);
-    setStatus("Saved conversation note locally");
+    setStatus(t("savedConversationNote"));
   } catch {
-    setStatus("Could not save conversation note");
+    setStatus(t("couldNotSaveConversationNote"));
   }
 }
 
 async function saveCurrentConversationBookmark(): Promise<void> {
   const conversation = state.conversation;
   if (!conversation) {
-    throw new Error("Capture a conversation before saving a bookmark");
+    throw new Error(t("captureBeforeSavingBookmark"));
   }
 
   state.bookmarks = await upsertConversationBookmark({
@@ -978,28 +1477,28 @@ async function saveCurrentConversationBookmark(): Promise<void> {
     savedAt: new Date().toISOString()
   });
   renderConversationBookmarks();
-  setStatus("Saved conversation bookmark locally");
+  setStatus(t("savedBookmark"));
 }
 
 async function copyConversationBookmark(id: string): Promise<void> {
   const bookmark = state.bookmarks.find((item) => item.id === id);
   if (!bookmark) {
-    throw new Error("Conversation bookmark was not found");
+    throw new Error(t("bookmarkNotFound"));
   }
 
   await navigator.clipboard.writeText(bookmark.url);
-  setStatus("Copied bookmark link to clipboard");
+  setStatus(t("copiedBookmark"));
 }
 
 async function deleteCurrentConversationBookmark(id: string): Promise<void> {
   const bookmark = state.bookmarks.find((item) => item.id === id);
   if (!bookmark) {
-    throw new Error("Conversation bookmark was not found");
+    throw new Error(t("bookmarkNotFound"));
   }
 
   state.bookmarks = await deleteConversationBookmark(bookmark.id);
   renderConversationBookmarks();
-  setStatus("Deleted conversation bookmark");
+  setStatus(t("deletedBookmark"));
 }
 
 function renderConversationBookmarks(): void {
@@ -1008,10 +1507,7 @@ function renderConversationBookmarks(): void {
   const list = conversationBookmarkList();
 
   section.hidden = !state.conversation;
-  context.textContent =
-    state.bookmarks.length === 1
-      ? "1 saved link"
-      : `${state.bookmarks.length} saved links`;
+  context.textContent = savedLinkCountText(state.bookmarks.length);
   list.textContent = "";
 
   if (!state.conversation) {
@@ -1021,7 +1517,7 @@ function renderConversationBookmarks(): void {
   if (state.bookmarks.length === 0) {
     const empty = document.createElement("div");
     empty.className = "acv-bookmark-empty";
-    empty.textContent = "No saved bookmarks";
+    empty.textContent = t("noSavedBookmarks");
     list.append(empty);
     return;
   }
@@ -1047,13 +1543,13 @@ function renderConversationBookmarks(): void {
     copyButton.type = "button";
     copyButton.dataset.acvAction = "copy-bookmark";
     copyButton.dataset.acvBookmarkId = bookmark.id;
-    copyButton.textContent = "Copy link";
+    copyButton.textContent = t("copyLink");
 
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
     deleteButton.dataset.acvAction = "delete-bookmark";
     deleteButton.dataset.acvBookmarkId = bookmark.id;
-    deleteButton.textContent = "Delete";
+    deleteButton.textContent = t("delete");
 
     details.append(title, url);
     actions.append(copyButton, deleteButton);
@@ -1076,7 +1572,7 @@ function createCapsuleDraftFromSelection(): void {
       const message = state.conversation?.messages[messageIndex];
       return message
         ? `${messageIndex + 1}. ${roleLabel(message.speaker)}: ${shortMessagePreview(message, 120)}`
-        : `${messageIndex + 1}. Selected message`;
+        : `${messageIndex + 1}. ${t("selectedMessage")}`;
     }),
     decisions: [],
     constraints: [],
@@ -1110,7 +1606,7 @@ function createCapsuleDraftFromSelection(): void {
   state.workCapsuleContextPromptEdited = false;
 
   renderWorkCapsuleSection();
-  setStatus(`Created capsule draft from ${conversation.messages.length} selected message${conversation.messages.length === 1 ? "" : "s"}`);
+  setStatus(createdCapsuleDraftStatus(conversation.messages.length));
 }
 
 async function saveCurrentWorkCapsule(): Promise<void> {
@@ -1118,7 +1614,7 @@ async function saveCurrentWorkCapsule(): Promise<void> {
   await createWorkCapsule(capsule);
   await refreshSavedWorkCapsules();
   renderWorkCapsuleSection();
-  setStatus("Saved capsule locally");
+  setStatus(t("savedCapsule"));
 }
 
 async function refreshSavedWorkCapsules(): Promise<void> {
@@ -1132,18 +1628,18 @@ async function refreshSavedWorkCapsules(): Promise<void> {
 
 async function reopenRecentWorkCapsule(): Promise<void> {
   if (!state.recentWorkCapsule) {
-    throw new Error("No saved capsule is available for this conversation");
+    throw new Error(t("noSavedCapsuleForConversation"));
   }
 
   state.workCapsuleDraft = state.recentWorkCapsule;
   state.workCapsuleContextPromptEdited = true;
   renderWorkCapsuleSection();
-  setStatus("Reopened saved capsule");
+  setStatus(t("reopenedSavedCapsule"));
 }
 
 async function reuseRecentWorkCapsule(): Promise<void> {
   if (!state.recentWorkCapsule) {
-    throw new Error("No saved capsule is available for this conversation");
+    throw new Error(t("noSavedCapsuleForConversation"));
   }
 
   reuseWorkCapsuleDraft(state.recentWorkCapsule);
@@ -1154,7 +1650,7 @@ async function reopenWorkCapsuleById(id: string): Promise<void> {
   state.workCapsuleDraft = capsule;
   state.workCapsuleContextPromptEdited = true;
   renderWorkCapsuleSection();
-  setStatus("Reopened saved capsule");
+  setStatus(t("reopenedSavedCapsule"));
 }
 
 async function reuseWorkCapsuleById(id: string): Promise<void> {
@@ -1187,24 +1683,24 @@ function reuseWorkCapsuleDraft(savedCapsule: WorkCapsuleV1): void {
   };
   state.workCapsuleContextPromptEdited = true;
   renderWorkCapsuleSection();
-  setStatus("Created unsaved capsule draft from saved capsule");
+  setStatus(t("createdUnsavedCapsule"));
 }
 
 async function deleteCurrentWorkCapsule(): Promise<void> {
   const capsule = state.workCapsuleDraft ? currentWorkCapsuleDraft() : state.recentWorkCapsule;
   if (!capsule) {
-    throw new Error("No saved capsule is available for this conversation");
+    throw new Error(t("noSavedCapsuleForConversation"));
   }
 
   if (!isSavedWorkCapsuleId(capsule.id)) {
-    throw new Error("Save the capsule before deleting it");
+    throw new Error(t("saveCapsuleBeforeDeleting"));
   }
 
   const confirmed = window.confirm(
-    `Delete saved Work Capsule "${capsule.title}" from this browser?`
+    deleteWorkCapsuleConfirmText(capsule.title)
   );
   if (!confirmed) {
-    setStatus("Delete canceled; saved capsule kept locally");
+    setStatus(t("deleteCanceled"));
     return;
   }
 
@@ -1216,28 +1712,28 @@ async function deleteCurrentWorkCapsule(): Promise<void> {
   await refreshSavedWorkCapsules();
 
   renderWorkCapsuleSection();
-  setStatus("Deleted saved capsule locally");
+  setStatus(t("deletedSavedCapsule"));
 }
 
 async function removeWorkCapsuleFromLibraryById(id: string): Promise<void> {
   const capsuleId = id.trim();
   if (!capsuleId) {
-    throw new Error("Saved capsule id is missing");
+    throw new Error(t("savedCapsuleIdMissing"));
   }
 
   const libraryItem = state.workCapsuleLibrary.find((item) => item.id === capsuleId);
   if (!libraryItem) {
     await refreshSavedWorkCapsules();
     renderWorkCapsuleSection();
-    setStatus("Saved capsule is no longer in the library");
+    setStatus(t("savedCapsuleNoLongerInLibrary"));
     return;
   }
 
   const confirmed = window.confirm(
-    `Remove saved Work Capsule "${libraryItem.title}" from this browser?`
+    removeWorkCapsuleConfirmText(libraryItem.title)
   );
   if (!confirmed) {
-    setStatus("Capsule remove canceled");
+    setStatus(t("capsuleRemoveCanceled"));
     return;
   }
 
@@ -1252,44 +1748,44 @@ async function removeWorkCapsuleFromLibraryById(id: string): Promise<void> {
   renderWorkCapsuleSection();
   setStatus(
     savedCapsule
-      ? "Removed saved capsule locally"
-      : "Removed missing or invalid saved capsule from library"
+      ? t("removedSavedCapsule")
+      : t("removedInvalidCapsule")
   );
 }
 
 async function copyCurrentWorkCapsuleContext(): Promise<void> {
   const capsule = currentWorkCapsuleDraft();
   await navigator.clipboard.writeText(selectedWorkCapsuleOutput(capsule));
-  setStatus(`Copied ${selectedWorkCapsuleOutputPresetName()} to clipboard`);
+  setStatus(copiedWorkCapsuleOutputStatus());
 }
 
 async function copyWorkCapsuleContextById(id: string): Promise<void> {
   const capsule = await savedWorkCapsuleById(id);
   await navigator.clipboard.writeText(selectedWorkCapsuleOutput(capsule));
-  setStatus(`Copied ${selectedWorkCapsuleOutputPresetName()} to clipboard`);
+  setStatus(copiedWorkCapsuleOutputStatus());
 }
 
 async function copyCurrentWorkCapsuleSourceCitation(): Promise<void> {
   const capsule = currentOrRecentWorkCapsule();
   await navigator.clipboard.writeText(renderWorkCapsuleSourceCitation(capsule));
-  setStatus("Copied source citation to clipboard");
+  setStatus(t("copiedSourceCitation"));
 }
 
 async function copyWorkCapsuleSourceCitationById(id: string): Promise<void> {
   const capsule = await savedWorkCapsuleById(id);
   await navigator.clipboard.writeText(renderWorkCapsuleSourceCitation(capsule));
-  setStatus("Copied source citation to clipboard");
+  setStatus(t("copiedSourceCitation"));
 }
 
 async function savedWorkCapsuleById(id: string): Promise<WorkCapsuleV1> {
   const capsuleId = id.trim();
   if (!capsuleId) {
-    throw new Error("Saved capsule id is missing");
+    throw new Error(t("savedCapsuleIdMissing"));
   }
 
   const capsule = await getWorkCapsule(capsuleId);
   if (!capsule) {
-    throw new Error("Saved capsule could not be loaded");
+    throw new Error(t("savedCapsuleLoadFailed"));
   }
 
   return capsule;
@@ -1298,7 +1794,7 @@ async function savedWorkCapsuleById(id: string): Promise<WorkCapsuleV1> {
 async function copyCurrentWorkCapsuleMarkdown(): Promise<void> {
   const capsule = currentWorkCapsuleDraft();
   await navigator.clipboard.writeText(renderWorkCapsuleMarkdown(capsule));
-  setStatus("Copied capsule Markdown to clipboard");
+  setStatus(t("copiedCapsuleMarkdown"));
 }
 
 function currentOrRecentWorkCapsule(): WorkCapsuleV1 {
@@ -1310,7 +1806,7 @@ function currentOrRecentWorkCapsule(): WorkCapsuleV1 {
     return state.recentWorkCapsule;
   }
 
-  throw new Error("Create a capsule draft before using capsule actions");
+  throw new Error(t("createCapsuleBeforeAction"));
 }
 
 function downloadCurrentWorkCapsule(): void {
@@ -1319,13 +1815,13 @@ function downloadCurrentWorkCapsule(): void {
     renderWorkCapsuleMarkdown(capsule),
     markdownFilename(capsule.title || "work-capsule")
   );
-  setStatus("Downloaded capsule Markdown file");
+  setStatus(t("downloadedCapsuleMarkdown"));
 }
 
 function currentWorkCapsuleDraft(): WorkCapsuleV1 {
   updateWorkCapsuleDraftFromFields();
   if (!state.workCapsuleDraft) {
-    throw new Error("Create a capsule draft before using capsule actions");
+    throw new Error(t("createCapsuleBeforeAction"));
   }
 
   return state.workCapsuleDraft;
@@ -1340,9 +1836,9 @@ function updateWorkCapsuleDraftFromFields(): void {
   const { project: _previousProject, ...draftWithoutProject } = draft;
   const nextDraftWithoutContextPrompt = {
     ...draftWithoutProject,
-    title: stringFieldValue("title") || "Untitled Work Capsule",
+    title: stringFieldValue("title") || t("untitledWorkCapsule"),
     ...optionalCapsuleField("project"),
-    goal: stringFieldValue("goal") || "Capture reusable context from selected messages.",
+    goal: stringFieldValue("goal") || t("defaultCapsuleGoal"),
     reusableContext: textAreaLines("reusableContext"),
     decisions: workCapsuleItems("decisions", "decision", draft.decisions),
     constraints: workCapsuleItems("constraints", "constraint", draft.constraints),
@@ -1384,18 +1880,17 @@ function renderWorkCapsuleSection(): void {
   renderWorkCapsulePresetOptions(workCapsulePresetSelect());
 
   if (!state.conversation) {
-    context.textContent = "Local draft";
+    context.textContent = t("localDraft");
     return;
   }
 
   const selectedCount = state.selectedMessageIndexes.size;
   const draftSelectedTurnCount = draft?.source.selectedTurnIds.length ?? 0;
-  const draftStatus = draft && !isSavedWorkCapsuleId(draft.id) ? " - unsaved draft" : "";
   context.textContent = draft
-    ? `${draftSelectedTurnCount} selected turn${draftSelectedTurnCount === 1 ? "" : "s"}${draftStatus}`
+    ? selectedTurnCountText(draftSelectedTurnCount, !isSavedWorkCapsuleId(draft.id))
     : state.recentWorkCapsule
-      ? "Recent capsule available"
-    : `${selectedCount} selected turn${selectedCount === 1 ? "" : "s"}`;
+      ? recentCapsuleAvailableText()
+    : selectedTurnCountText(selectedCount);
 
   if (state.recentWorkCapsule && !draft) {
     renderRecentWorkCapsule(state.recentWorkCapsule, recent);
@@ -1466,27 +1961,27 @@ function renderRecentWorkCapsule(capsule: WorkCapsuleV1, container: HTMLDivEleme
   label.textContent = workCapsuleDisplayLabel(capsule);
 
   const updated = document.createElement("span");
-  updated.textContent = `Updated ${capsule.updatedAt}`;
+  updated.textContent = updatedAtText(capsule.updatedAt);
 
   const button = document.createElement("button");
   button.type = "button";
   button.dataset.acvAction = "reopen-capsule";
-  button.textContent = "Reopen";
+  button.textContent = t("reopen");
 
   const reuseButton = document.createElement("button");
   reuseButton.type = "button";
   reuseButton.dataset.acvAction = "reuse-capsule";
-  reuseButton.textContent = "Reuse";
+  reuseButton.textContent = t("reuse");
 
   const copySourceButton = document.createElement("button");
   copySourceButton.type = "button";
   copySourceButton.dataset.acvAction = "copy-capsule-source-citation";
-  copySourceButton.textContent = "Copy source";
+  copySourceButton.textContent = t("copySource");
 
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
   deleteButton.dataset.acvAction = "delete-capsule";
-  deleteButton.textContent = "Delete";
+  deleteButton.textContent = t("delete");
 
   const actions = document.createElement("div");
   actions.className = "acv-work-capsule-recent-actions";
@@ -1501,12 +1996,12 @@ function renderWorkCapsuleLibrary(container: HTMLDivElement): void {
   heading.className = "acv-work-capsule-library-heading";
 
   const title = document.createElement("strong");
-  title.textContent = "Library";
+  title.textContent = t("library");
 
   const visibleCapsules = state.workCapsuleLibrary.slice(0, WORK_CAPSULE_LIBRARY_LIMIT);
   const count = visibleCapsules.length;
   const summary = document.createElement("span");
-  summary.textContent = `${count} recent saved capsule${count === 1 ? "" : "s"}`;
+  summary.textContent = recentSavedCapsulesText(count);
 
   heading.append(title, summary);
 
@@ -1561,7 +2056,7 @@ function workCapsuleLibraryGroupHeading(capsule: WorkCapsuleIndexItem): string {
   return (
     compactFieldLine(capsule.project ?? "") ||
     compactFieldLine(capsule.sourceTitle) ||
-    "Unknown source"
+    t("unknownSource")
   );
 }
 
@@ -1583,7 +2078,7 @@ function renderWorkCapsuleLibraryRow(capsule: WorkCapsuleIndexItem): HTMLDivElem
   source.textContent = workCapsuleLibraryLabel(capsule);
 
   const updated = document.createElement("span");
-  updated.textContent = `Updated ${capsule.updatedAt}`;
+  updated.textContent = updatedAtText(capsule.updatedAt);
 
   details.append(title, goal, source, updated);
 
@@ -1591,31 +2086,31 @@ function renderWorkCapsuleLibraryRow(capsule: WorkCapsuleIndexItem): HTMLDivElem
   reopenButton.type = "button";
   reopenButton.dataset.acvAction = "reopen-library-capsule";
   reopenButton.dataset.acvCapsuleId = capsule.id;
-  reopenButton.textContent = "Reopen";
+  reopenButton.textContent = t("reopen");
 
   const reuseButton = document.createElement("button");
   reuseButton.type = "button";
   reuseButton.dataset.acvAction = "reuse-library-capsule";
   reuseButton.dataset.acvCapsuleId = capsule.id;
-  reuseButton.textContent = "Reuse";
+  reuseButton.textContent = t("reuse");
 
   const copyButton = document.createElement("button");
   copyButton.type = "button";
   copyButton.dataset.acvAction = "copy-library-capsule-context";
   copyButton.dataset.acvCapsuleId = capsule.id;
-  copyButton.textContent = "Copy context";
+  copyButton.textContent = t("copyContext");
 
   const copySourceButton = document.createElement("button");
   copySourceButton.type = "button";
   copySourceButton.dataset.acvAction = "copy-library-capsule-source-citation";
   copySourceButton.dataset.acvCapsuleId = capsule.id;
-  copySourceButton.textContent = "Copy source";
+  copySourceButton.textContent = t("copySource");
 
   const removeButton = document.createElement("button");
   removeButton.type = "button";
   removeButton.dataset.acvAction = "remove-library-capsule";
   removeButton.dataset.acvCapsuleId = capsule.id;
-  removeButton.textContent = "Remove";
+  removeButton.textContent = t("remove");
 
   const actions = document.createElement("div");
   actions.className = "acv-work-capsule-library-actions";
@@ -1638,7 +2133,7 @@ function workCapsuleDisplayLabel(capsule: {
   const project = capsule.project ? compactFieldLine(capsule.project) : "";
   const sourceTitle = "source" in capsule ? capsule.source?.title : capsule.sourceTitle;
   const sourceUrl = "source" in capsule ? capsule.source?.url : capsule.sourceUrl;
-  return project || sourceTitle || sourceUrl || "Unknown source";
+  return project || sourceTitle || sourceUrl || t("unknownSource");
 }
 
 function artifactMarkdownInput(artifact: WorkCapsuleArtifact): string {
@@ -1730,7 +2225,7 @@ function workCapsuleDeleteButton(): HTMLButtonElement {
     'button[data-acv-action="delete-capsule"][data-acv-capsule-draft-action="true"]'
   );
   if (!button) {
-    throw new Error("Work capsule delete button is unavailable");
+    throw new Error(t("workCapsuleDeleteUnavailable"));
   }
 
   return button;
@@ -1746,16 +2241,16 @@ function currentWorkCapsuleSourceFromSelection(): Pick<
 > {
   const conversation = state.conversation;
   if (!conversation) {
-    throw new Error("Capture a conversation before reusing a saved capsule");
+    throw new Error(t("captureBeforeReusingCapsule"));
   }
 
   if (conversation.messages.length === 0) {
-    throw new Error("No messages were detected to reuse");
+    throw new Error(t("noMessagesToReuse"));
   }
 
   const selectedIndexes = sortedSelectedMessageIndexes();
   if (selectedIndexes.length === 0) {
-    throw new Error("Select at least one message to reuse");
+    throw new Error(t("selectOneMessageToReuse"));
   }
 
   return {
@@ -1798,7 +2293,7 @@ function compactFieldLine(value: string): string {
 }
 
 function shortConversationContext(conversation: ConversationExport): string {
-  const label = conversation.title.trim() || conversation.url.trim() || "Current conversation";
+  const label = conversation.title.trim() || conversation.url.trim() || t("currentConversation");
   return label.length > 38 ? `${label.slice(0, 35)}...` : label;
 }
 
@@ -1870,23 +2365,23 @@ function createPromptSnippet(): void {
   state.selectedSnippetId = snippet.id;
   renderPromptLibrary();
   promptTitleInput().focus();
-  setStatus("New prompt snippet");
+  setStatus(t("newPromptSnippet"));
 }
 
 async function saveCurrentPromptSnippet(): Promise<void> {
   const snippet = selectedPromptSnippet();
   if (!snippet) {
-    throw new Error("No prompt snippet is selected");
+    throw new Error(t("noPromptSelected"));
   }
 
   const title = normalizedPromptTitle(promptTitleInput().value);
   const body = promptBodyInput().value;
   if (!title) {
-    throw new Error("Add a slash command before saving");
+    throw new Error(t("addSlashCommand"));
   }
 
   if (body.trim().length === 0) {
-    throw new Error("Add a prompt body before saving");
+    throw new Error(t("addPromptBody"));
   }
 
   updateSelectedPromptSnippet({ title, body });
@@ -1897,7 +2392,7 @@ async function saveCurrentPromptSnippet(): Promise<void> {
     ? selectedId
     : state.snippets[0]?.id ?? "";
   renderPromptLibrary();
-  setStatus("Saved prompt snippet locally");
+  setStatus(t("savedPromptSnippet"));
 }
 
 async function deleteCurrentPromptSnippet(): Promise<void> {
@@ -1905,7 +2400,7 @@ async function deleteCurrentPromptSnippet(): Promise<void> {
     (snippet) => snippet.id === state.selectedSnippetId
   );
   if (selectedIndex === -1) {
-    throw new Error("No prompt snippet is selected");
+    throw new Error(t("noPromptSelected"));
   }
 
   const remaining = state.snippets.filter((snippet) => snippet.id !== state.selectedSnippetId);
@@ -1915,7 +2410,7 @@ async function deleteCurrentPromptSnippet(): Promise<void> {
 
   await savePromptSnippets(state.snippets);
   renderPromptLibrary();
-  setStatus("Deleted prompt snippet");
+  setStatus(t("deletedPromptSnippet"));
 }
 
 function updateSelectedPromptSnippet(fields: Partial<Pick<PromptSnippet, "title" | "body">>): void {
@@ -1931,11 +2426,11 @@ function selectedPromptBody(options: { allowEmpty?: boolean } = {}): string {
       return "";
     }
 
-    throw new Error("No prompt snippet is selected");
+    throw new Error(t("noPromptSelected"));
   }
 
   if (!options.allowEmpty && snippet.body.trim().length === 0) {
-    throw new Error("Prompt body is empty");
+    throw new Error(t("promptBodyEmpty"));
   }
 
   return snippet.body;
@@ -1974,10 +2469,99 @@ function uniquePromptSnippetId(): string {
   return id;
 }
 
+function popupRoot(): HTMLDivElement {
+  const root = document.querySelector<HTMLDivElement>("#root");
+  if (!root) {
+    throw new Error("Popup root is unavailable");
+  }
+
+  return root;
+}
+
+function capturedMessagesStatus(count: number): string {
+  return state.locale === "zh"
+    ? `已捕获 ${count} 条消息`
+    : `Captured ${count} message${count === 1 ? "" : "s"}`;
+}
+
+function selectedMessagesStatus(selectedCount: number, totalCount: number): string {
+  return state.locale === "zh"
+    ? `已选择 ${selectedCount} / ${totalCount} 条消息`
+    : `Selected ${selectedCount} of ${totalCount} messages`;
+}
+
+function navigatorCountText(resultCount: number, totalCount: number): string {
+  return state.locale === "zh"
+    ? `${resultCount} / ${totalCount} 轮`
+    : `${resultCount} of ${totalCount} turns`;
+}
+
+function focusedMessageStatus(messageIndex: number, totalCount: number): string {
+  return state.locale === "zh"
+    ? `已聚焦第 ${messageIndex} / ${totalCount} 条消息`
+    : `Focused message ${messageIndex} of ${totalCount}`;
+}
+
+function savedLinkCountText(count: number): string {
+  return state.locale === "zh"
+    ? `已保存 ${count} 个链接`
+    : `${count} saved link${count === 1 ? "" : "s"}`;
+}
+
+function createdCapsuleDraftStatus(count: number): string {
+  return state.locale === "zh"
+    ? `已从 ${count} 条已选消息创建胶囊草稿`
+    : `Created capsule draft from ${count} selected message${count === 1 ? "" : "s"}`;
+}
+
+function selectedTurnCountText(count: number, isUnsavedDraft = false): string {
+  if (state.locale === "zh") {
+    return `已选 ${count} 轮${isUnsavedDraft ? " - 未保存草稿" : ""}`;
+  }
+
+  return `${count} selected turn${count === 1 ? "" : "s"}${isUnsavedDraft ? " - unsaved draft" : ""}`;
+}
+
+function recentCapsuleAvailableText(): string {
+  return state.locale === "zh" ? "有可用的最近胶囊" : "Recent capsule available";
+}
+
+function recentSavedCapsulesText(count: number): string {
+  return state.locale === "zh"
+    ? `${count} 个最近保存的胶囊`
+    : `${count} recent saved capsule${count === 1 ? "" : "s"}`;
+}
+
+function updatedAtText(value: string): string {
+  return state.locale === "zh" ? `更新于 ${value}` : `Updated ${value}`;
+}
+
+function selectedWorkCapsulePresetStatus(): string {
+  const name = selectedWorkCapsuleOutputPresetName();
+  return state.locale === "zh" ? `已选择 ${name}` : `Selected ${name}`;
+}
+
+function copiedWorkCapsuleOutputStatus(): string {
+  const name = selectedWorkCapsuleOutputPresetName();
+  return state.locale === "zh" ? `已复制 ${name} 到剪贴板` : `Copied ${name} to clipboard`;
+}
+
+function deleteWorkCapsuleConfirmText(title: string): string {
+  return state.locale === "zh"
+    ? `从此浏览器删除已保存的工作胶囊 "${title}"？`
+    : `Delete saved Work Capsule "${title}" from this browser?`;
+}
+
+function removeWorkCapsuleConfirmText(title: string): string {
+  return state.locale === "zh"
+    ? `从此浏览器移除已保存的工作胶囊 "${title}"？`
+    : `Remove saved Work Capsule "${title}" from this browser?`;
+}
+
 function preview(): HTMLTextAreaElement {
   const textarea = document.querySelector<HTMLTextAreaElement>("textarea[aria-label='Markdown preview']");
   if (!textarea) {
-    throw new Error("Preview panel is unavailable");
+    throw new Error(t("previewUnavailable"));
   }
   return textarea;
 }
@@ -1985,7 +2569,7 @@ function preview(): HTMLTextAreaElement {
 function promptSelect(): HTMLSelectElement {
   const select = document.querySelector<HTMLSelectElement>("select[data-acv-prompt-select]");
   if (!select) {
-    throw new Error("Prompt selector is unavailable");
+    throw new Error(t("promptSelectorUnavailable"));
   }
   return select;
 }
@@ -1993,7 +2577,7 @@ function promptSelect(): HTMLSelectElement {
 function promptTitleInput(): HTMLInputElement {
   const input = document.querySelector<HTMLInputElement>("input[data-acv-prompt-title]");
   if (!input) {
-    throw new Error("Prompt title input is unavailable");
+    throw new Error(t("promptTitleUnavailable"));
   }
   return input;
 }
@@ -2001,7 +2585,7 @@ function promptTitleInput(): HTMLInputElement {
 function promptBodyInput(): HTMLTextAreaElement {
   const textarea = document.querySelector<HTMLTextAreaElement>("textarea[data-acv-prompt-body]");
   if (!textarea) {
-    throw new Error("Prompt body input is unavailable");
+    throw new Error(t("promptBodyUnavailable"));
   }
   return textarea;
 }
@@ -2009,7 +2593,7 @@ function promptBodyInput(): HTMLTextAreaElement {
 function conversationNotesSection(): HTMLElement {
   const section = document.querySelector<HTMLElement>(".acv-conversation-notes");
   if (!section) {
-    throw new Error("Conversation notes section is unavailable");
+    throw new Error(t("notesSectionUnavailable"));
   }
   return section;
 }
@@ -2019,7 +2603,7 @@ function conversationNoteInput(): HTMLTextAreaElement {
     "textarea[data-acv-conversation-note]"
   );
   if (!textarea) {
-    throw new Error("Conversation note input is unavailable");
+    throw new Error(t("noteInputUnavailable"));
   }
   return textarea;
 }
@@ -2027,7 +2611,7 @@ function conversationNoteInput(): HTMLTextAreaElement {
 function conversationNoteContext(): HTMLSpanElement {
   const context = document.querySelector<HTMLSpanElement>("[data-acv-notes-context]");
   if (!context) {
-    throw new Error("Conversation notes context is unavailable");
+    throw new Error(t("notesContextUnavailable"));
   }
   return context;
 }
@@ -2035,7 +2619,7 @@ function conversationNoteContext(): HTMLSpanElement {
 function conversationBookmarksSection(): HTMLElement {
   const section = document.querySelector<HTMLElement>(".acv-conversation-bookmarks");
   if (!section) {
-    throw new Error("Conversation bookmarks section is unavailable");
+    throw new Error(t("bookmarksSectionUnavailable"));
   }
   return section;
 }
@@ -2043,7 +2627,7 @@ function conversationBookmarksSection(): HTMLElement {
 function conversationBookmarksContext(): HTMLSpanElement {
   const context = document.querySelector<HTMLSpanElement>("[data-acv-bookmarks-context]");
   if (!context) {
-    throw new Error("Conversation bookmarks context is unavailable");
+    throw new Error(t("bookmarksContextUnavailable"));
   }
   return context;
 }
@@ -2051,7 +2635,7 @@ function conversationBookmarksContext(): HTMLSpanElement {
 function conversationBookmarkList(): HTMLDivElement {
   const list = document.querySelector<HTMLDivElement>(".acv-bookmark-list");
   if (!list) {
-    throw new Error("Conversation bookmark list is unavailable");
+    throw new Error(t("bookmarkListUnavailable"));
   }
   return list;
 }
@@ -2059,7 +2643,7 @@ function conversationBookmarkList(): HTMLDivElement {
 function workCapsuleSection(): HTMLElement {
   const section = document.querySelector<HTMLElement>(".acv-work-capsule");
   if (!section) {
-    throw new Error("Work capsule section is unavailable");
+    throw new Error(t("workCapsuleSectionUnavailable"));
   }
   return section;
 }
@@ -2067,7 +2651,7 @@ function workCapsuleSection(): HTMLElement {
 function workCapsuleFields(): HTMLDivElement {
   const fields = document.querySelector<HTMLDivElement>(".acv-work-capsule-fields");
   if (!fields) {
-    throw new Error("Work capsule fields are unavailable");
+    throw new Error(t("workCapsuleFieldsUnavailable"));
   }
   return fields;
 }
@@ -2075,7 +2659,7 @@ function workCapsuleFields(): HTMLDivElement {
 function workCapsuleRecent(): HTMLDivElement {
   const recent = document.querySelector<HTMLDivElement>(".acv-work-capsule-recent");
   if (!recent) {
-    throw new Error("Recent work capsule panel is unavailable");
+    throw new Error(t("recentWorkCapsuleUnavailable"));
   }
   return recent;
 }
@@ -2083,7 +2667,7 @@ function workCapsuleRecent(): HTMLDivElement {
 function workCapsuleLibrary(): HTMLDivElement {
   const library = document.querySelector<HTMLDivElement>(".acv-work-capsule-library");
   if (!library) {
-    throw new Error("Work capsule library panel is unavailable");
+    throw new Error(t("workCapsuleLibraryUnavailable"));
   }
 
   return library;
@@ -2092,7 +2676,7 @@ function workCapsuleLibrary(): HTMLDivElement {
 function workCapsulePresetSelect(): HTMLSelectElement {
   const select = document.querySelector<HTMLSelectElement>("select[data-acv-capsule-preset]");
   if (!select) {
-    throw new Error("Work capsule preset selector is unavailable");
+    throw new Error(t("workCapsulePresetUnavailable"));
   }
 
   return select;
@@ -2101,7 +2685,7 @@ function workCapsulePresetSelect(): HTMLSelectElement {
 function workCapsuleContext(): HTMLSpanElement {
   const context = document.querySelector<HTMLSpanElement>("[data-acv-work-capsule-context]");
   if (!context) {
-    throw new Error("Work capsule context is unavailable");
+    throw new Error(t("workCapsuleContextUnavailable"));
   }
   return context;
 }
@@ -2109,7 +2693,7 @@ function workCapsuleContext(): HTMLSpanElement {
 function messagePanel(): HTMLDivElement {
   const panel = document.querySelector<HTMLDivElement>(".acv-message-panel");
   if (!panel) {
-    throw new Error("Message selection panel is unavailable");
+    throw new Error(t("messageSelectionUnavailable"));
   }
   return panel;
 }
@@ -2117,7 +2701,7 @@ function messagePanel(): HTMLDivElement {
 function messageList(): HTMLDivElement {
   const list = document.querySelector<HTMLDivElement>(".acv-message-list");
   if (!list) {
-    throw new Error("Message selection panel is unavailable");
+    throw new Error(t("messageSelectionUnavailable"));
   }
   return list;
 }
@@ -2125,7 +2709,7 @@ function messageList(): HTMLDivElement {
 function navigatorSearch(): HTMLInputElement {
   const input = document.querySelector<HTMLInputElement>("input[data-acv-message-search]");
   if (!input) {
-    throw new Error("Message search is unavailable");
+    throw new Error(t("messageSearchUnavailable"));
   }
   return input;
 }
@@ -2133,7 +2717,7 @@ function navigatorSearch(): HTMLInputElement {
 function navigatorRoleFilter(): HTMLSelectElement {
   const select = document.querySelector<HTMLSelectElement>("select[data-acv-role-filter]");
   if (!select) {
-    throw new Error("Message role filter is unavailable");
+    throw new Error(t("messageRoleFilterUnavailable"));
   }
   return select;
 }
@@ -2141,7 +2725,7 @@ function navigatorRoleFilter(): HTMLSelectElement {
 function navigatorCount(): HTMLSpanElement {
   const count = document.querySelector<HTMLSpanElement>("[data-acv-navigator-count]");
   if (!count) {
-    throw new Error("Message navigator count is unavailable");
+    throw new Error(t("navigatorCountUnavailable"));
   }
   return count;
 }
@@ -2149,7 +2733,7 @@ function navigatorCount(): HTMLSpanElement {
 function navigatorResults(): HTMLDivElement {
   const results = document.querySelector<HTMLDivElement>(".acv-navigator-results");
   if (!results) {
-    throw new Error("Message navigator results are unavailable");
+    throw new Error(t("navigatorResultsUnavailable"));
   }
   return results;
 }

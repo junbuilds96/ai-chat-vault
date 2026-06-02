@@ -238,6 +238,14 @@ function promptSelect(): HTMLSelectElement {
   return select;
 }
 
+function localeSelect(): HTMLSelectElement {
+  const select = document.querySelector<HTMLSelectElement>("select[data-acv-locale-select]");
+  if (!select) {
+    throw new Error("Missing locale select");
+  }
+  return select;
+}
+
 function workCapsuleSection(): HTMLElement {
   const section = document.querySelector<HTMLElement>(".acv-work-capsule");
   if (!section) {
@@ -426,6 +434,31 @@ describe("toolbar popup", () => {
     expect(preview()).toContain("# Popup Test - ChatGPT");
     expect(preview()).toContain("## User\n\nQuestion one");
     expect(preview()).toContain("## Assistant\n\nAnswer two");
+  });
+
+  it("switches the popup chrome between English and Chinese and persists the locale", async () => {
+    const chromeMock = installChromeMock();
+
+    await loadPopup();
+    await flushPromptLoad();
+
+    expect(document.documentElement.lang).toBe("en");
+    expect(button("capture").textContent).toBe("Capture");
+
+    localeSelect().value = "zh";
+    localeSelect().dispatchEvent(new Event("change", { bubbles: true }));
+    await flushAsyncClick();
+
+    expect(chromeMock.store.aiChatVaultLocale).toBe("zh");
+    expect(document.documentElement.lang).toBe("zh");
+    expect(button("capture").textContent).toBe("捕获");
+    expect(document.querySelector(".acv-status")?.textContent).toBe("就绪");
+
+    await loadPopup();
+    await flushPromptLoad();
+
+    expect(document.documentElement.lang).toBe("zh");
+    expect(button("download").textContent).toBe("下载");
   });
 
   it("loads local conversation notes after capture", async () => {
